@@ -1,4 +1,4 @@
-module github.com/joe/vibrant
+module github.com/xupit3r/vibrant
 
 go 1.25.6
 
