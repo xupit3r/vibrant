@@ -54,13 +54,13 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - [x] Implement logging infrastructure
 - [x] Update specs as each component is implemented
 
-### Phase 2: System Detection & Model Management
-- [ ] Implement RAM detection utility
-- [ ] Create model registry (metadata for supported models)
-- [ ] Build model selection algorithm based on available RAM
-- [ ] Implement model downloader (from Hugging Face)
-- [ ] Create model cache/storage management
-- [ ] Update `specs/model-management.md` with implementation details
+### Phase 2: System Detection & Model Management ✅ COMPLETE
+- [x] Implement RAM detection utility
+- [x] Create model registry (metadata for supported models)
+- [x] Build model selection algorithm based on available RAM
+- [x] Implement model downloader (from Hugging Face)
+- [x] Create model cache/storage management
+- [x] Update `specs/model-management.md` with implementation details
 
 ### Phase 3: LLM Integration
 - [ ] Integrate llama.cpp Go bindings
