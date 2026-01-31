@@ -557,3 +557,202 @@ func shapesEqual(a, b []int) bool {
 	}
 	return true
 }
+
+// Test cache operations
+func TestAttention_CacheOperations(t *testing.T) {
+	cfg := createMockConfig()
+	cfg.NumHeads = 4
+	cfg.NumKVHeads = 4
+	cfg.HeadDim = 32
+	cfg.HiddenDim = 128
+
+	// Create mock attention layer
+	attn := &Attention{
+		wq:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumHeads * cfg.HeadDim}, tensor.Float32),
+		wk:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumKVHeads * cfg.HeadDim}, tensor.Float32),
+		wv:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumKVHeads * cfg.HeadDim}, tensor.Float32),
+		wo:         tensor.NewTensor([]int{cfg.NumHeads * cfg.HeadDim, cfg.HiddenDim}, tensor.Float32),
+		numHeads:   cfg.NumHeads,
+		numKVHeads: cfg.NumKVHeads,
+		headDim:    cfg.HeadDim,
+		hiddenDim:  cfg.HiddenDim,
+		rope:       NewRoPE(cfg.HeadDim, cfg.RopeFreqBase, cfg.ContextLength),
+	}
+
+	initTensor(attn.wq, 0.01)
+	initTensor(attn.wk, 0.01)
+	initTensor(attn.wv, 0.01)
+	initTensor(attn.wo, 0.01)
+
+	// Test 1: First forward pass builds cache
+	input1 := tensor.NewTensor([]int{1, 3, cfg.HiddenDim}, tensor.Float32)
+	initTensor(input1, 0.1)
+	positions1 := []int{0, 1, 2}
+
+	_, err := attn.Forward(input1, positions1, true) // useCache=true
+	if err != nil {
+		t.Fatalf("First forward pass failed: %v", err)
+	}
+
+	// Check cache was created
+	if attn.kCache == nil || attn.vCache == nil {
+		t.Error("Cache should be initialized after first forward pass")
+	}
+
+	if attn.cacheLen != 3 {
+		t.Errorf("Expected cache length 3, got %d", attn.cacheLen)
+	}
+
+	// Test 2: Second forward pass appends to cache
+	input2 := tensor.NewTensor([]int{1, 2, cfg.HiddenDim}, tensor.Float32)
+	initTensor(input2, 0.2)
+	positions2 := []int{3, 4}
+
+	_, err = attn.Forward(input2, positions2, true) // useCache=true
+	if err != nil {
+		t.Fatalf("Second forward pass failed: %v", err)
+	}
+
+	// Check cache grew
+	if attn.cacheLen != 5 {
+		t.Errorf("Expected cache length 5 after append, got %d", attn.cacheLen)
+	}
+
+	// Test 3: Clear cache
+	attn.ClearCache()
+
+	if attn.kCache != nil || attn.vCache != nil {
+		t.Error("Cache should be nil after clearing")
+	}
+
+	if attn.cacheLen != 0 {
+		t.Errorf("Expected cache length 0 after clear, got %d", attn.cacheLen)
+	}
+}
+
+func TestModel_ClearCache(t *testing.T) {
+	cfg := createMockConfig()
+	cfg.NumHeads = 4
+	cfg.NumKVHeads = 4
+	cfg.HeadDim = 32
+	cfg.HiddenDim = 128
+	cfg.NumLayers = 2
+
+	// Create mock model with 2 layers
+	layers := make([]*TransformerLayer, 2)
+	for i := 0; i < 2; i++ {
+		attn := &Attention{
+			wq:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumHeads * cfg.HeadDim}, tensor.Float32),
+			wk:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumKVHeads * cfg.HeadDim}, tensor.Float32),
+			wv:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumKVHeads * cfg.HeadDim}, tensor.Float32),
+			wo:         tensor.NewTensor([]int{cfg.NumHeads * cfg.HeadDim, cfg.HiddenDim}, tensor.Float32),
+			numHeads:   cfg.NumHeads,
+			numKVHeads: cfg.NumKVHeads,
+			headDim:    cfg.HeadDim,
+			hiddenDim:  cfg.HiddenDim,
+			rope:       NewRoPE(cfg.HeadDim, cfg.RopeFreqBase, cfg.ContextLength),
+			cacheLen:   5, // Simulate cached tokens
+			kCache:     tensor.NewTensor([]int{1, 4, 5, 32}, tensor.Float32),
+			vCache:     tensor.NewTensor([]int{1, 4, 5, 32}, tensor.Float32),
+		}
+
+		ffn := &FeedForward{
+			gate:            tensor.NewTensor([]int{cfg.HiddenDim, cfg.IntermediateDim}, tensor.Float32),
+			up:              tensor.NewTensor([]int{cfg.HiddenDim, cfg.IntermediateDim}, tensor.Float32),
+			down:            tensor.NewTensor([]int{cfg.IntermediateDim, cfg.HiddenDim}, tensor.Float32),
+			hiddenDim:       cfg.HiddenDim,
+			intermediateDim: cfg.IntermediateDim,
+		}
+
+		attnNormWeight := tensor.NewTensor([]int{cfg.HiddenDim}, tensor.Float32)
+		ffnNormWeight := tensor.NewTensor([]int{cfg.HiddenDim}, tensor.Float32)
+		initTensor(attnNormWeight, 1.0)
+		initTensor(ffnNormWeight, 1.0)
+
+		attnNorm, _ := NewRMSNorm(attnNormWeight, cfg.RMSNormEps)
+		ffnNorm, _ := NewRMSNorm(ffnNormWeight, cfg.RMSNormEps)
+
+		layers[i] = &TransformerLayer{
+			layerIdx: i,
+			attn:     attn,
+			ffn:      ffn,
+			attnNorm: attnNorm,
+			ffnNorm:  ffnNorm,
+		}
+	}
+
+	model := &Model{
+		config: cfg,
+		layers: layers,
+	}
+
+	// Clear all caches
+	model.ClearCache()
+
+	// Verify all caches are cleared
+	for i, layer := range model.layers {
+		if layer.attn.kCache != nil || layer.attn.vCache != nil {
+			t.Errorf("Layer %d cache should be nil after model.ClearCache()", i)
+		}
+		if layer.attn.cacheLen != 0 {
+			t.Errorf("Layer %d cache length should be 0, got %d", i, layer.attn.cacheLen)
+		}
+	}
+}
+
+func TestConcatenateSeqDim(t *testing.T) {
+	// Cached: [1, 2, 3, 4] (batch=1, heads=2, seq=3, dim=4)
+	cached := tensor.NewTensor([]int{1, 2, 3, 4}, tensor.Float32)
+	for b := 0; b < 1; b++ {
+		for h := 0; h < 2; h++ {
+			for s := 0; s < 3; s++ {
+				for d := 0; d < 4; d++ {
+					cached.Set(float32(s*10+d), b, h, s, d)
+				}
+			}
+		}
+	}
+
+	// New: [1, 2, 2, 4] (batch=1, heads=2, seq=2, dim=4)
+	new := tensor.NewTensor([]int{1, 2, 2, 4}, tensor.Float32)
+	for b := 0; b < 1; b++ {
+		for h := 0; h < 2; h++ {
+			for s := 0; s < 2; s++ {
+				for d := 0; d < 4; d++ {
+					new.Set(float32(100+s*10+d), b, h, s, d)
+				}
+			}
+		}
+	}
+
+	// Concatenate
+	result := concatenateSeqDim(cached, new, 3)
+
+	// Check shape: [1, 2, 5, 4]
+	shape := result.Shape()
+	if shape[0] != 1 || shape[1] != 2 || shape[2] != 5 || shape[3] != 4 {
+		t.Errorf("Expected shape [1,2,5,4], got %v", shape)
+	}
+
+	// Check values: first 3 positions should be from cached
+	for s := 0; s < 3; s++ {
+		for d := 0; d < 4; d++ {
+			expected := float32(s*10 + d)
+			actual := result.At(0, 0, s, d)
+			if actual != expected {
+				t.Errorf("Cached values at [0,0,%d,%d]: expected %f, got %f", s, d, expected, actual)
+			}
+		}
+	}
+
+	// Check values: last 2 positions should be from new
+	for s := 0; s < 2; s++ {
+		for d := 0; d < 4; d++ {
+			expected := float32(100 + s*10 + d)
+			actual := result.At(0, 0, 3+s, d)
+			if actual != expected {
+				t.Errorf("New values at [0,0,%d,%d]: expected %f, got %f", 3+s, d, expected, actual)
+			}
+		}
+	}
+}
