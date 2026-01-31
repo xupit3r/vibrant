@@ -62,8 +62,8 @@ m.engine.Close()
 m.engine = nil
 }
 
-// Load new model
-engine, err := NewLlamaEngine(cached.Path, m.loadOpts)
+// Load new model with custom engine (pure Go)
+engine, err := NewCustomEngine(cached.Path, m.loadOpts)
 if err != nil {
 return fmt.Errorf("failed to load model: %w", err)
 }
