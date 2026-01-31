@@ -20,9 +20,8 @@ func Add(a, b *Tensor) *Tensor {
 		aData := a.data.([]float32)
 		bData := b.data.([]float32)
 		cData := result.data.([]float32)
-		for i := range aData {
-			cData[i] = aData[i] + bData[i]
-		}
+		// Use SIMD-optimized vector addition
+		vectorAdd(cData, aData, bData)
 	default:
 		panic(fmt.Sprintf("Add not implemented for dtype %s", a.dtype))
 	}
@@ -43,9 +42,8 @@ func Sub(a, b *Tensor) *Tensor {
 		aData := a.data.([]float32)
 		bData := b.data.([]float32)
 		cData := result.data.([]float32)
-		for i := range aData {
-			cData[i] = aData[i] - bData[i]
-		}
+		// Use SIMD-optimized vector subtraction
+		vectorSub(cData, aData, bData)
 	default:
 		panic(fmt.Sprintf("Sub not implemented for dtype %s", a.dtype))
 	}
@@ -66,9 +64,8 @@ func Mul(a, b *Tensor) *Tensor {
 		aData := a.data.([]float32)
 		bData := b.data.([]float32)
 		cData := result.data.([]float32)
-		for i := range aData {
-			cData[i] = aData[i] * bData[i]
-		}
+		// Use SIMD-optimized vector multiplication
+		vectorMul(cData, aData, bData)
 	default:
 		panic(fmt.Sprintf("Mul not implemented for dtype %s", a.dtype))
 	}

@@ -21,16 +21,30 @@ func MatMul(a, b *Tensor) *Tensor {
 		panic(fmt.Sprintf("MatMul dimension mismatch: [%d x %d] @ [%d x %d]", M, K, K2, N))
 	}
 
-	// Dispatch to best implementation based on size
-	if M*N*K < 1024 {
-		// Small matrices: use naive implementation
-		return matmulNaive(a, b)
-	} else if M*N*K < 1024*1024 {
-		// Medium matrices: use blocked implementation
-		return matmulBlocked(a, b)
+	// Dispatch to best implementation based on size and SIMD availability
+	ops := M * N * K
+
+	if HasAVX2() || HasNEON() {
+		// SIMD-optimized implementations
+		if ops < 1024 {
+			// Small matrices: use SIMD
+			return matmulSIMD(a, b)
+		} else if ops < 1024*1024 {
+			// Medium matrices: use SIMD blocked
+			return matmulSIMDBlocked(a, b)
+		} else {
+			// Large matrices: use SIMD parallel
+			return matmulSIMDParallel(a, b)
+		}
 	} else {
-		// Large matrices: use parallel blocked implementation
-		return matmulParallel(a, b)
+		// Fallback to non-SIMD implementations
+		if ops < 1024 {
+			return matmulNaive(a, b)
+		} else if ops < 1024*1024 {
+			return matmulBlocked(a, b)
+		} else {
+			return matmulParallel(a, b)
+		}
 	}
 }
 
