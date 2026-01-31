@@ -198,6 +198,24 @@ func (a *Assistant) ClearHistory() {
 	a.conversation.AddSystemMessage(template.System)
 }
 
+// GetConversation returns the conversation manager
+func (a *Assistant) GetConversation() *ConversationManager {
+	return a.conversation
+}
+
+// GetLLMManager returns the LLM manager
+func (a *Assistant) GetLLMManager() *llm.Manager {
+	return a.llmManager
+}
+
+// Close cleans up resources
+func (a *Assistant) Close() error {
+	if a.llmManager != nil {
+		a.llmManager.Close()
+	}
+	return nil
+}
+
 // GetHistory returns the conversation history
 func (a *Assistant) GetHistory() []Message {
 	return a.conversation.GetMessages()
@@ -211,9 +229,4 @@ func (a *Assistant) SaveConversation() error {
 // LoadConversation loads a saved conversation
 func (a *Assistant) LoadConversation(conversationID string) error {
 	return a.conversation.Load(conversationID)
-}
-
-// Close closes the assistant and releases resources
-func (a *Assistant) Close() error {
-	return a.llmManager.Close()
 }
