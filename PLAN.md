@@ -354,8 +354,184 @@ Transform Vibrant into an agentic code assistant with Claude Code-level capabili
 - **Coverage**: 80%+ test coverage on all new code
 - **UX**: Smooth, predictable, helpful
 
+## Phase 10: Custom Pure Go Inference Engine 🚀 IN PROGRESS
+
+### Vision
+Build a production-grade LLM inference engine from scratch in pure Go, giving Vibrant:
+- **Full control** over the inference pipeline
+- **Zero CGO dependency** (no C++ compiler needed)
+- **Embedded inference** (single binary, no external daemon)
+- **Foundation for bleeding-edge research** integration
+
+### Timeline: 8-9 Months to Production-Ready
+
+#### Phase 10.1: Tensor Library Foundation (Months 1-3) 🔨 IN PROGRESS
+- [ ] Core tensor data structures (Tensor, DataType, Device)
+- [ ] Basic operations (add, mul, transpose, reshape, etc.)
+- [ ] Matrix multiplication (GEMM/GEMV) - critical performance bottleneck
+- [ ] Memory management with mmap for large model files
+- [ ] Quantization data types (Q4_K, Q5_K, Q8_0)
+- [ ] 95%+ test coverage with numerical validation
+- [ ] Benchmark suite for all operations
+
+**Deliverable**: Complete `internal/tensor/` package
+
+#### Phase 10.2: SIMD Optimization (Months 2-4, overlaps 10.1)
+- [ ] AVX2 optimizations for x86 CPUs
+- [ ] NEON optimizations for ARM (Apple Silicon)
+- [ ] Platform detection with fallback to naive implementations
+- [ ] Quantization/dequantization math (Q4_K, Q5_K, Q8_0)
+- [ ] 2-4x performance boost on matrix operations
+
+**Deliverable**: SIMD-accelerated tensor operations
+
+#### Phase 10.3: GGUF Format Support (Months 3-4)
+- [ ] GGUF binary format parser
+- [ ] Metadata extraction (architecture, vocab, hyperparams)
+- [ ] Lazy tensor loading with memory mapping
+- [ ] Support for Qwen 2.5 GGUF files
+
+**Deliverable**: Complete `internal/gguf/` package
+
+#### Phase 10.4: Tokenizer (Months 4-5)
+- [ ] BPE (Byte-Pair Encoding) implementation
+- [ ] Vocabulary loading from GGUF metadata
+- [ ] Encode/decode with special tokens (<BOS>, <EOS>)
+- [ ] Exact match with llama.cpp tokenization
+
+**Deliverable**: Complete `internal/tokenizer/` package
+
+#### Phase 10.5: Transformer Architecture (Months 5-7)
+- [ ] Model configuration from GGUF metadata
+- [ ] Embeddings layer
+- [ ] Multi-head self-attention with KV-cache
+- [ ] SwiGLU feed-forward networks
+- [ ] RMSNorm layer normalization
+- [ ] Rotary positional embeddings (RoPE)
+- [ ] Complete Qwen 2.5 model assembly
+- [ ] Numerical validation (logits within 1e-4 of llama.cpp)
+
+**Deliverable**: Complete `internal/transformer/` package
+
+#### Phase 10.6: Inference Pipeline (Months 7-8)
+- [ ] Two-stage processing (Prefill → Decode)
+- [ ] KV-cache management
+- [ ] Sampling strategies (temperature, top-p, top-k)
+- [ ] Streaming token generation via channels
+- [ ] Context cancellation support
+
+**Deliverable**: Complete `internal/inference/` package
+
+#### Phase 10.7: Integration & Testing (Months 8-9)
+- [ ] Replace go-llama.cpp with custom engine
+- [ ] Update `internal/llm/engine_custom.go`
+- [ ] Update build system (no CGO needed)
+- [ ] Comprehensive testing (unit, integration, numerical)
+- [ ] Performance benchmarks vs llama.cpp
+- [ ] Complete documentation
+
+**Deliverable**: Production release with custom engine
+
+#### Phase 10.8: Ongoing Optimization (Months 9+)
+- [ ] Performance profiling and tuning
+- [ ] Assembly for critical hot paths
+- [ ] Flash Attention implementation
+- [ ] Research integration pipeline
+- [ ] Speculative decoding
+- [ ] Quantized KV-cache
+
+**Deliverable**: Continuous improvement
+
+### Project Structure (New Packages)
+```
+internal/
+├── tensor/          # NEW: Core tensor library (~10 files)
+│   ├── tensor.go           # Data structures
+│   ├── ops.go              # Basic operations
+│   ├── matmul.go           # Matrix multiplication
+│   ├── simd_amd64.go       # AVX2 optimizations
+│   ├── simd_arm64.go       # NEON optimizations
+│   ├── quantize.go         # Quantization ops
+│   ├── mmap.go             # Memory mapping
+│   └── tensor_test.go
+│
+├── gguf/            # NEW: GGUF format support (~4 files)
+│   ├── parser.go           # Binary parser
+│   ├── metadata.go         # Metadata structures
+│   ├── loader.go           # Tensor loading
+│   └── gguf_test.go
+│
+├── transformer/     # NEW: Transformer architecture (~7 files)
+│   ├── config.go           # Model configuration
+│   ├── embeddings.go       # Token embeddings
+│   ├── attention.go        # Multi-head attention
+│   ├── feedforward.go      # SwiGLU FFN
+│   ├── layer.go            # Transformer block
+│   ├── model.go            # Full model
+│   ├── rope.go             # RoPE embeddings
+│   └── transformer_test.go
+│
+├── inference/       # NEW: Inference pipeline (~4 files)
+│   ├── engine.go           # Inference engine
+│   ├── sampler.go          # Sampling strategies
+│   ├── cache.go            # KV-cache
+│   ├── pipeline.go         # Prefill/decode
+│   └── inference_test.go
+│
+├── tokenizer/       # NEW: Tokenization (~3 files)
+│   ├── bpe.go              # BPE implementation
+│   ├── vocab.go            # Vocabulary
+│   └── tokenizer_test.go
+│
+└── llm/             # MODIFIED: Add custom engine
+    ├── engine_custom.go    # NEW
+    └── manager.go          # Updated
+```
+
+### Performance Targets
+- **Initial release**: 5-20 tokens/sec on CPU (within 2-5x of llama.cpp)
+- **After optimization**: Approach llama.cpp performance with SIMD
+
+### Build System Updates
+```bash
+# Default: Pure Go, no CGO
+make build   # Uses custom engine
+
+# Legacy comparison (keep temporarily)
+make build-llama   # Uses go-llama.cpp
+```
+
+### Success Criteria
+- ✅ Load and run Qwen 2.5 3B/7B/14B GGUF models
+- ✅ Numerical accuracy within 1e-4 of llama.cpp
+- ✅ All existing Vibrant tests pass
+- ✅ Performance: 5-20 tokens/sec on CPU (acceptable)
+- ✅ Complete documentation
+- ✅ Pure Go build (no CGO)
+
+### Technical Approach
+- **Pure Go**: No CGO, works on any Go-supported platform
+- **SIMD**: Hand-optimized for AVX2 (x86) and NEON (ARM)
+- **Quantization**: Q4_K_M, Q5_K_M, Q8_0 support
+- **Memory**: mmap for efficient large file loading
+- **Streaming**: Token-by-token via Go channels
+
+### Research Integration Strategy
+1. **Monitor**: ArXiv, HuggingFace, llama.cpp PRs
+2. **Evaluate**: Impact on code model performance
+3. **Prototype**: Quick implementation in research branch
+4. **Benchmark**: Measure improvement on Vibrant use cases
+5. **Integrate**: Merge if beneficial, document trade-offs
+
+### Open Questions
+1. **Quantization priority**: Q4_K_M (most common) or all formats from start?
+2. **Model coverage**: Qwen 2.5 only initially, or also LLaMA/Mistral?
+3. **CI/CD**: Automated benchmarking from day one?
+4. **Migration**: Keep llama.cpp build indefinitely or deprecate?
+
 ## See Also
 
-- [Phase 9 Detailed Plan](../session-state/68520a2b-874e-4383-b6fe-27ef0ddb1158/phase9-claude-code-features.md)
-- [Tool System Spec](./specs/tools.md) (to be created)
-- [Agent Architecture Spec](./specs/agent.md) (to be created)
+- [Phase 9 Detailed Plan](./PHASE9_SUMMARY.md)
+- [Custom Engine Spec](./specs/custom-inference.md)
+- [Tensor Library Spec](./specs/tensor-system.md)
+- [GGUF Format Spec](./specs/gguf-format.md)
