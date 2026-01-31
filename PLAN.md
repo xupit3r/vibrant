@@ -79,13 +79,13 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - [x] Implement project structure summarization
 - [x] Update `specs/context-system.md` with indexing algorithms
 
-### Phase 5: Assistant Core Features
-- [ ] Conversation history manager (in-memory + optional persistence)
-- [ ] Prompt template system for coding tasks
-- [ ] Context injection (file contents, project structure)
-- [ ] Response streaming to terminal
-- [ ] Error handling and recovery
-- [ ] Update `specs/assistant-core.md` with conversation flow
+### Phase 5: Assistant Core Features ✅ COMPLETE
+- [x] Conversation history manager (in-memory + optional persistence)
+- [x] Prompt template system for coding tasks
+- [x] Context injection (file contents, project structure)
+- [x] Response streaming to terminal
+- [x] Error handling and recovery
+- [x] Update `specs/assistant-core.md` with conversation flow
 
 ### Phase 6: CLI User Experience
 - [ ] Interactive chat mode (bubbletea TUI)
