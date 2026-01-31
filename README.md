@@ -16,10 +16,14 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 - 🔌 **Extensible**: Plugin system for custom functionality
 - 📝 **Git Integration**: Smart commit message generation with conventional commits
 - 🔍 **Semantic Search**: TF-IDF based vector store for code retrieval
+- 🤖 **Agentic**: 15+ tools for multi-step workflows with self-correction
+- 🧪 **Test & Build**: Integrated testing, building, and linting support
+- ✏️ **Code Editing**: Diff-based file editing with automatic backups
+- 🔬 **AST Analysis**: Deep code understanding with symbol extraction
 
 ## Status
 
-✅ **Core Complete** - Advanced features implemented!
+✅ **Feature Complete** - Agentic code assistant with Claude Code-inspired capabilities!
 
 ### Completed Phases
 - ✅ **Phase 1**: Project Setup & Foundation
@@ -30,16 +34,52 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 - ✅ **Phase 6**: CLI User Experience
 - ✅ **Phase 7**: Advanced Features (RAG, Plugins, Git Integration)
 - ✅ **Phase 8**: Testing & Optimization
+- ✅ **Phase 9**: Agentic Behavior (Claude Code-inspired)
 
 ### Key Capabilities
-- **Multi-turn conversations** with intelligent context pruning
-- **Semantic code search** using vector embeddings (TF-IDF)
-- **Diff generation** and smart commit messages
+
+**🤖 Agentic Behavior (Phase 9.1)**
+- **Tool calling system** with 15+ built-in tools
+- **Multi-step planning** with dependency tracking
+- **Self-correction** with automatic retry strategies
+- **Task decomposition** for complex workflows
+- **Progress tracking** and result summarization
+
+**🧠 Code Intelligence (Phase 9.2)**
+- **AST parsing** for Go with symbol extraction
+- **Symbol resolution** (functions, methods, types, structs, interfaces)
+- **Dependency tracking** and import analysis
+- **Cross-package references** and code navigation
+
+**✏️ Interactive Editing (Phase 9.3)**
+- **Diff-based editing** with unified diff format
+- **Find/replace** operations across files
+- **Automatic backups** before modifications
+- **Patch application** with validation
+
+**🧪 Testing & Building (Phase 9.4-9.5)**
+- **Test execution** for Go, Python, Node.js
+- **Auto-detect** test frameworks and build tools
+- **Build integration** (go build, make, npm, pip)
+- **Error parsing** and diagnostic reporting
+
+**🔍 Quality Assurance (Phase 9.6)**
+- **Linting integration** (golangci-lint, pylint, eslint)
+- **Security scanning** support
+- **Best practices** suggestions
+- **Issue reporting** with context
+
+**📊 RAG & Performance**
+- **Semantic code search** using TF-IDF vector embeddings
+- **Smart commit messages** with conventional commits
 - **Plugin system** for extensibility (93.2% test coverage)
-- **85+ unit tests** with comprehensive integration tests
-- **Performance benchmarks**: <1µs for most operations
+- **164+ unit tests** with comprehensive coverage
+- **Performance**: <1µs for most operations
 
 ### Test Coverage
+- `agent`: 100%
+- `codeintel`: 100%
+- `tools`: 100%
 - `assistant`: 59.6%
 - `context`: 49.7%
 - `diff`: 78.3%
@@ -97,12 +137,15 @@ CGO_ENABLED=1 go build -tags llama -o vibrant ./cmd/vibrant
 vibrant/
 ├── cmd/vibrant/       # CLI entry point
 ├── internal/          # Private application code
+│   ├── agent/        # Agentic behavior: planning, self-correction
 │   ├── assistant/    # Conversation & prompt handling
+│   ├── codeintel/    # AST parsing, symbol extraction
 │   ├── context/      # Code indexing, RAG, vector store
 │   ├── diff/         # Diff generation & git integration
 │   ├── model/        # Model management & caching
 │   ├── llm/          # LLM inference engine
 │   ├── plugin/       # Plugin system
+│   ├── tools/        # Tool registry (15+ tools)
 │   ├── config/       # Configuration management
 │   ├── system/       # System detection utilities
 │   └── tui/          # Terminal UI components
@@ -110,6 +153,35 @@ vibrant/
 ├── specs/            # Technical specifications
 └── docs/             # Additional documentation
 ```
+
+## Available Tools
+
+Vibrant includes 15+ built-in tools for agentic workflows:
+
+**File Operations**
+- `read_file` - Read file contents
+- `write_file` - Write content to files
+- `list_directory` - List directory contents
+- `backup_file` - Create file backups
+- `replace_in_file` - Find and replace in files
+
+**Code Analysis**
+- `analyze_code` - AST-based code analysis
+- `find_files` - Search files by pattern
+- `grep` - Search patterns in files
+- `get_file_info` - Get file metadata
+
+**Editing & Diffs**
+- `generate_diff` - Create unified diffs
+- `apply_diff` - Apply patches to files
+
+**Build & Test**
+- `run_tests` - Execute tests (Go, Python, Node.js)
+- `build` - Build projects (make, go, npm, pip)
+- `lint` - Run linters (golangci-lint, pylint, eslint)
+
+**Shell**
+- `shell` - Execute shell commands with timeout
 
 ## Model Support
 
