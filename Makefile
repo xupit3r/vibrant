@@ -92,6 +92,12 @@ bench: ## Run benchmarks
 	@echo "Running benchmarks..."
 	@go test ./test/bench/... -bench=. -benchmem
 
+check-deps: ## Check for required dependencies
+	@./scripts/check-deps.sh
+
+install-deps: ## Install missing dependencies
+	@./scripts/check-deps.sh --install
+
 tidy: ## Tidy dependencies
 	@echo "Tidying dependencies..."
 	@go mod tidy

@@ -6,15 +6,37 @@ Vibrant uses llama.cpp for local LLM inference. By default, the build system att
 
 ## Quick Start
 
+The easiest way to set up dependencies is using the automated script:
+
 ```bash
+# Check what dependencies are missing
+./scripts/check-deps.sh
+
+# Or use make target
+make check-deps
+
+# Install missing dependencies automatically
+./scripts/check-deps.sh --install
+
+# Or use make target
+make install-deps
+
 # Try building (will use llama.cpp if available, mock otherwise)
 make build
+```
 
-# Force llama.cpp build (will fail if dependencies missing)
-make build-llama
+### Script Options
 
-# Build with mock engine (for testing/development)
-make build-mock
+```bash
+./scripts/check-deps.sh [OPTIONS]
+
+OPTIONS:
+    --install       Install missing dependencies (requires sudo on Linux)
+    --verbose       Show detailed output including tool locations
+    --dry-run       Show what would be installed without installing
+    --quiet         Minimal output (errors only)
+    --help          Show help message
+    --version       Show version information
 ```
 
 ## Prerequisites

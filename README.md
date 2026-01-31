@@ -155,19 +155,24 @@ vibrant ask --context ./src "How does authentication work?"
 - C++ compiler (gcc/clang) for llama.cpp integration (optional - falls back to mock)
 - Make
 
+### Quick Setup
+
 ```bash
 # Clone repository
 git clone https://github.com/xupit3r/vibrant.git
 cd vibrant
+
+# Check and install dependencies automatically
+make install-deps
+
+# Or just check what's missing
+make check-deps
 
 # Build (tries llama.cpp, falls back to mock if unavailable)
 make build
 
 # Run tests
 make test
-
-# Run benchmarks
-make bench
 ```
 
 ### Build Options
