@@ -87,7 +87,14 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - [x] Error handling and recovery
 - [x] Update `specs/assistant-core.md` with conversation flow
 
-### Phase 6: CLI User Experience
+**Testing Milestone** ✅ COMPLETE
+- [x] Unit tests for system detection (82.7% coverage)
+- [x] Unit tests for model management (25.6% coverage)
+- [x] Unit tests for context indexing (33.1% coverage)
+- [x] Unit tests for conversation and prompts (44.8% coverage)
+- [x] All 41 tests passing across 4 packages
+
+### Phase 6: CLI User Experience (IN PROGRESS)
 - [ ] Interactive chat mode (bubbletea TUI)
 - [ ] Single-shot query mode (`vibrant ask "question"`)
 - [ ] File/directory context passing (`--context ./src`)
@@ -103,7 +110,7 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - [ ] Plugin system for extensibility
 
 ### Phase 8: Testing & Optimization
-- [ ] Unit tests for core components
+- [x] Unit tests for core components
 - [ ] Integration tests with sample models
 - [ ] Performance profiling and optimization
 - [ ] Memory usage optimization
