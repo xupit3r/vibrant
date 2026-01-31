@@ -12,7 +12,7 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 
 ### Technology Stack
 - **Language**: Go (lightweight, excellent concurrency, cross-platform)
-- **LLM Backend**: llama.cpp via Go bindings (go-llama.cpp or similar)
+- **LLM Backend**: llama.cpp via Go bindings (enabled by default)
 - **Model Format**: GGUF (quantized models optimized for CPU inference)
 - **Recommended Models**:
   - Qwen 2.5 Coder series (3B/7B/14B)
@@ -68,7 +68,7 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - [x] Create inference wrapper with streaming support
 - [x] Add quantization support (Q4_K_M, Q5_K_M, Q8_0)
 - [x] Implement context window management
-- [x] Build system with mock engine for testing
+- [x] Build system with llama.cpp by default, mock engine for testing
 - [x] Update `specs/llm-integration.md` with API details
 
 ### Phase 4: Code Context System ✅ COMPLETE
@@ -100,6 +100,7 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - [x] File/directory context passing (`--context ./src`)
 - [x] Syntax highlighting for code blocks
 - [x] Copy/save response functionality
+- [x] Shell tab-completion (zsh, bash, fish)
 - [x] Update `specs/cli-interface.md` with commands and UX flows
 
 **Phase 6 Features Implemented:**
@@ -111,6 +112,10 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - Keyboard shortcuts (Ctrl+C exit, Ctrl+D clear, Enter send)
 - Save responses with --save flag
 - Non-stream mode with highlighted output
+- Advanced shell tab-completion for zsh, bash, and fish
+  - Context-aware completions (flags, subcommands, file paths)
+  - Model ID completions for model commands
+  - Config key completions for config commands
 
 ### Phase 7: Advanced Features (Optional) ✅ COMPLETE
 - [x] Multi-turn conversation with context pruning

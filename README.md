@@ -15,6 +15,7 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 - 🔒 **Private**: All processing happens locally - your code never leaves your machine
 - 🔌 **Extensible**: Plugin system for custom functionality
 - 📝 **Git Integration**: Smart commit message generation with conventional commits
+- ⌨️  **Tab-Completion**: Advanced shell completion for zsh, bash, and fish
 - 🔍 **Semantic Search**: TF-IDF based vector store for code retrieval
 - 🤖 **Agentic**: 15+ tools for multi-step workflows with self-correction
 - 🧪 **Test & Build**: Integrated testing, building, and linting support
@@ -86,13 +87,48 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 - `plugin`: 93.2%
 - `system`: 82.7%
 
+## Installation
+
+### Install from Source
+
+```bash
+# Clone and build
+git clone https://github.com/xupit3r/vibrant.git
+cd vibrant
+make build
+
+# Install to system path
+make install
+```
+
+### Shell Completion (Recommended)
+
+After installing, enable tab-completion for your shell:
+
+```bash
+# Zsh
+vibrant completion zsh > ~/.zsh/completion/_vibrant
+echo 'fpath=(~/.zsh/completion $fpath)' >> ~/.zshrc
+echo 'autoload -Uz compinit && compinit' >> ~/.zshrc
+
+# Bash
+vibrant completion bash > ~/.local/share/bash-completion/completions/vibrant
+source ~/.local/share/bash-completion/completions/vibrant
+
+# Fish
+vibrant completion fish > ~/.config/fish/completions/vibrant.fish
+```
+
+Restart your shell or source your config to activate completions.
+
 ## Usage
 
 ```bash
 # List available models
 vibrant model list
 
-# Download a specific model
+# Download a specific model (with tab-completion!)
+vibrant model download <TAB>
 vibrant model download qwen2.5-coder-7b-q5
 
 # Show model information
@@ -101,7 +137,8 @@ vibrant model info qwen2.5-coder-3b-q4
 # Ask a question (downloads model if needed)
 vibrant ask "What is a goroutine?"
 
-# With specific model
+# With specific model (use tab to see available models)
+vibrant ask --model <TAB>
 vibrant ask --model qwen2.5-coder-7b-q5 "Explain Go interfaces"
 
 # Interactive chat mode
@@ -113,23 +150,42 @@ vibrant ask --context ./src "How does authentication work?"
 
 ## Building from Source
 
+**Requirements:**
+- Go 1.21 or later
+- C++ compiler (gcc/clang) for llama.cpp integration (optional - falls back to mock)
+- Make
+
 ```bash
 # Clone repository
 git clone https://github.com/xupit3r/vibrant.git
 cd vibrant
+
+# Build (tries llama.cpp, falls back to mock if unavailable)
+make build
 
 # Run tests
 make test
 
 # Run benchmarks
 make bench
+```
 
-# Build (standard - uses mock engine)
+### Build Options
+
+By default, `make build` **attempts to build with llama.cpp** for real LLM inference. If llama.cpp dependencies aren't available, it automatically falls back to a mock engine.
+
+```bash
+# Default: tries llama.cpp, falls back to mock
 make build
 
-# Build with llama.cpp (requires C++ compiler)
-CGO_ENABLED=1 go build -tags llama -o vibrant ./cmd/vibrant
+# Force llama.cpp (fails if dependencies missing)
+make build-llama
+
+# Force mock engine (for development/testing)
+make build-mock
 ```
+
+See [docs/llama-setup.md](docs/llama-setup.md) for detailed setup instructions.
 
 ## Architecture
 
