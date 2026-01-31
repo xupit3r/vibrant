@@ -94,13 +94,23 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - [x] Unit tests for conversation and prompts (44.8% coverage)
 - [x] All 41 tests passing across 4 packages
 
-### Phase 6: CLI User Experience (IN PROGRESS)
-- [ ] Interactive chat mode (bubbletea TUI)
-- [ ] Single-shot query mode (`vibrant ask "question"`)
-- [ ] File/directory context passing (`--context ./src`)
-- [ ] Syntax highlighting for code blocks
-- [ ] Copy/save response functionality
-- [ ] Update `specs/cli-interface.md` with commands and UX flows
+### Phase 6: CLI User Experience ✅ COMPLETE
+- [x] Interactive chat mode (bubbletea TUI)
+- [x] Single-shot query mode (`vibrant ask "question"`)
+- [x] File/directory context passing (`--context ./src`)
+- [x] Syntax highlighting for code blocks
+- [x] Copy/save response functionality
+- [x] Update `specs/cli-interface.md` with commands and UX flows
+
+**Phase 6 Features Implemented:**
+- Bubbletea-based TUI with viewport and textarea
+- Message history with scrolling
+- Real-time streaming responses
+- Syntax highlighting with chroma (30+ languages)
+- Context file indicators
+- Keyboard shortcuts (Ctrl+C exit, Ctrl+D clear, Enter send)
+- Save responses with --save flag
+- Non-stream mode with highlighted output
 
 ### Phase 7: Advanced Features (Optional)
 - [ ] Multi-turn conversation with context pruning
