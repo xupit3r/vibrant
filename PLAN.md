@@ -71,6 +71,8 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - [x] Build system with llama.cpp by default, mock engine for testing
 - [x] Update `specs/llm-integration.md` with API details
 
+**Note**: Real llama.cpp inference requires manual vendor setup due to git submodule requirements. Mock engine works perfectly for development/testing. See docs/llama-setup.md for details.
+
 ### Phase 4: Code Context System ✅ COMPLETE
 - [x] Build file tree walker/indexer
 - [x] Implement .gitignore-aware file filtering

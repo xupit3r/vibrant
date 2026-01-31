@@ -144,20 +144,69 @@ go test ./internal/llm -v -run TestBuildTag
 
 ## Troubleshooting
 
+## Troubleshooting
+
 ### Error: "common.h: No such file or directory"
 
-**Problem**: llama.cpp bindings aren't properly installed.
+**Problem**: The go-llama.cpp bindings require the llama.cpp source code as a git submodule, which isn't automatically downloaded by Go modules.
 
-**Solution**:
+**Root Cause**: 
+- go-llama.cpp uses git submodules to include llama.cpp source
+- Go module cache is read-only and doesn't clone submodules
+- The C++ bindings need llama.cpp headers and source files
+
+**Solutions**:
+
+**Option 1: Use Mock Engine (Recommended for Development)**
 ```bash
-# Clean and retry
-go clean -cache
-go mod download
-go mod tidy
-
-# If still failing, use mock build
 make build-mock
 ```
+The mock engine works perfectly for development and testing. All features work except actual LLM inference.
+
+**Option 2: Setup Check Script**
+```bash
+./scripts/setup-llama.sh
+```
+This script explains the issue and provides detailed setup instructions.
+
+**Option 3: Manual Vendor Setup**
+```bash
+# Clone go-llama.cpp with submodules into vendor directory
+mkdir -p vendor/github.com/go-skynet
+cd vendor/github.com/go-skynet
+git clone --recurse-submodules https://github.com/go-skynet/go-llama.cpp
+cd go-llama.cpp
+make libbinding.a
+
+# Return to project root
+cd ../../../../
+
+# Build with vendor mode
+go build -mod=vendor -tags llama -o vibrant ./cmd/vibrant
+```
+
+**Option 4: Use Ollama (Easiest for Real Inference)**
+
+Ollama is a much easier alternative that manages models and provides an API:
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull a model
+ollama pull qwen2.5-coder:7b
+
+# Ollama runs as a service and provides an API
+# Future versions of Vibrant will support Ollama directly
+```
+
+**Why This Happens**:
+Go's module system downloads source code but doesn't execute git commands like submodule initialization. The go-llama.cpp library expects llama.cpp source to be in a subdirectory, which requires git submodule init. This is a known limitation of Go modules with C/C++ bindings that use submodules.
+
+**Current Status**:
+- Mock engine: ✅ Works out of the box
+- Real inference: ⚠️ Requires manual setup
+- Future: Will add Ollama support for easier real inference
 
 ### Error: "undefined reference to llama_*"
 

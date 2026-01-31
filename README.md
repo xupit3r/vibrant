@@ -26,6 +26,8 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 
 ✅ **Feature Complete** - Agentic code assistant with Claude Code-inspired capabilities!
 
+**Note on LLM Inference**: Currently uses a mock engine by default due to go-llama.cpp requiring manual setup (git submodules). This is perfect for development and testing. For real inference, we recommend using Ollama or manual vendor setup. See [docs/llama-setup.md](docs/llama-setup.md) for details.
+
 ### Completed Phases
 - ✅ **Phase 1**: Project Setup & Foundation
 - ✅ **Phase 2**: System Detection & Model Management

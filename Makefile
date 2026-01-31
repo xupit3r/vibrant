@@ -98,6 +98,9 @@ check-deps: ## Check for required dependencies
 install-deps: ## Install missing dependencies
 	@./scripts/check-deps.sh --install
 
+setup-llama: ## Check llama.cpp setup and show instructions
+	@./scripts/setup-llama.sh || true
+
 tidy: ## Tidy dependencies
 	@echo "Tidying dependencies..."
 	@go mod tidy
