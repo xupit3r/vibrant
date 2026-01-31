@@ -115,7 +115,25 @@ lint: ## Run linter
 
 bench: ## Run benchmarks
 	@echo "Running benchmarks..."
-	@go test ./test/bench/... -bench=. -benchmem
+	@go test ./internal/... -bench=. -benchmem -benchtime=3s
+
+bench-tensor: ## Run tensor benchmarks only
+	@echo "Running tensor benchmarks..."
+	@go test ./internal/tensor -bench=. -benchmem -benchtime=5s
+
+bench-inference: ## Run inference benchmarks (requires test model)
+	@echo "Running inference benchmarks..."
+	@go test ./internal/inference -bench=. -benchmem -benchtime=3s
+
+bench-compare: ## Run benchmarks and compare with baseline
+	@echo "Running benchmarks and comparing..."
+	@go test ./internal/... -bench=. -benchmem -benchtime=3s | tee bench-new.txt
+	@if [ -f bench-baseline.txt ]; then \
+		benchstat bench-baseline.txt bench-new.txt; \
+	else \
+		echo "No baseline found. Saving current as baseline..."; \
+		cp bench-new.txt bench-baseline.txt; \
+	fi
 
 check-deps: ## Check for required dependencies
 	@./scripts/check-deps.sh
