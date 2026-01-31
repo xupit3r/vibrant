@@ -41,18 +41,19 @@ func NewEmbeddings(ggufFile *gguf.GGUFFile, cfg *Config) (*Embeddings, error) {
 		return nil, fmt.Errorf("embedding weight tensor not found (tried: %v)", tensorNames)
 	}
 
-	// Verify shape: [vocab_size, hidden_dim]
+	// Verify shape: GGUF stores as [hidden_dim, vocab_size] (transposed)
 	shape := weight.Shape()
 	if len(shape) != 2 {
 		return nil, fmt.Errorf("embedding weight must be 2D, got shape %v", shape)
 	}
-	if shape[0] != cfg.VocabSize {
-		return nil, fmt.Errorf("embedding vocab size mismatch: weight has %d, config has %d",
-			shape[0], cfg.VocabSize)
-	}
-	if shape[1] != cfg.HiddenDim {
-		return nil, fmt.Errorf("embedding hidden dim mismatch: weight has %d, config has %d",
-			shape[1], cfg.HiddenDim)
+
+	// Check if dimensions match (either order)
+	if (shape[0] == cfg.VocabSize && shape[1] == cfg.HiddenDim) ||
+		(shape[0] == cfg.HiddenDim && shape[1] == cfg.VocabSize) {
+		// Dimensions are correct, we'll handle the transpose during lookup
+	} else {
+		return nil, fmt.Errorf("embedding shape mismatch: weight has %v, expected [%d, %d] or [%d, %d]",
+			shape, cfg.VocabSize, cfg.HiddenDim, cfg.HiddenDim, cfg.VocabSize)
 	}
 
 	return &Embeddings{
@@ -94,15 +95,25 @@ func (e *Embeddings) Forward(tokenIDs [][]int) (*tensor.Tensor, error) {
 	output := tensor.NewTensor([]int{batchSize, seqLen, e.hiddenDim}, tensor.Float32)
 
 	// Look up embeddings
-	// For each token ID, copy the corresponding row from the weight matrix
+	// For each token ID, copy the corresponding row/column from the weight matrix
+	// GGUF stores embeddings as [hidden_dim, vocab_size] so we need to access column for each token
+	weightShape := e.weight.Shape()
+	transposed := weightShape[0] == e.hiddenDim // true if [hidden_dim, vocab_size]
+
 	for b := 0; b < batchSize; b++ {
 		for s := 0; s < seqLen; s++ {
 			tokenID := tokenIDs[b][s]
 
 			// Get embedding vector for this token
-			// embedding = weight[tokenID, :]
 			for d := 0; d < e.hiddenDim; d++ {
-				val := e.weight.At(tokenID, d)
+				var val float32
+				if transposed {
+					// Weight is [hidden_dim, vocab_size], access weight[d, tokenID]
+					val = e.weight.At(d, tokenID)
+				} else {
+					// Weight is [vocab_size, hidden_dim], access weight[tokenID, d]
+					val = e.weight.At(tokenID, d)
+				}
 				output.Set(val, b, s, d)
 			}
 		}

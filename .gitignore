@@ -35,3 +35,6 @@ Thumbs.db
 # Build artifacts
 dist/
 build/
+debug-load
+list-tensors
+test-inference

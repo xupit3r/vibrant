@@ -152,11 +152,23 @@ func NewTensorMmap(path string, offset int64, size int64, shape []int, dtype Dat
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
 
-	// Memory-map the file region
+	// mmap requires offset to be page-aligned
+	pageSize := int64(os.Getpagesize())
+
+	// Calculate page-aligned offset (round down)
+	alignedOffset := (offset / pageSize) * pageSize
+
+	// Calculate the page offset (offset within the page)
+	pageOffset := int(offset - alignedOffset)
+
+	// Adjust size to include the page offset
+	alignedSize := int(size) + pageOffset
+
+	// Memory-map the file region with aligned offset
 	mmapData, err := syscall.Mmap(
 		int(f.Fd()),
-		offset,
-		int(size),
+		alignedOffset,
+		alignedSize,
 		syscall.PROT_READ,
 		syscall.MAP_SHARED,
 	)
@@ -165,18 +177,21 @@ func NewTensorMmap(path string, offset int64, size int64, shape []int, dtype Dat
 		return nil, fmt.Errorf("failed to mmap: %w", err)
 	}
 
+	// Adjust mmapData to start at the actual tensor data (skip page offset)
+	actualData := mmapData[pageOffset : pageOffset+int(size)]
+
 	// Wrap data based on dtype
 	var data interface{}
 	switch dtype {
 	case Float32:
 		// Cast []byte to []float32 using unsafe
-		data = (*[1 << 30]float32)(unsafe.Pointer(&mmapData[0]))[:len(mmapData)/4:len(mmapData)/4]
+		data = (*[1 << 30]float32)(unsafe.Pointer(&actualData[0]))[:len(actualData)/4:len(actualData)/4]
 	case Float16:
-		data = (*[1 << 30]uint16)(unsafe.Pointer(&mmapData[0]))[:len(mmapData)/2:len(mmapData)/2]
+		data = (*[1 << 30]uint16)(unsafe.Pointer(&actualData[0]))[:len(actualData)/2:len(actualData)/2]
 	case Q4_K, Q5_K, Q8_0:
-		data = mmapData
+		data = actualData
 	default:
-		data = (*[1 << 30]float32)(unsafe.Pointer(&mmapData[0]))[:len(mmapData)/4:len(mmapData)/4]
+		data = (*[1 << 30]float32)(unsafe.Pointer(&actualData[0]))[:len(actualData)/4:len(actualData)/4]
 	}
 
 	return &Tensor{
@@ -187,7 +202,7 @@ func NewTensorMmap(path string, offset int64, size int64, shape []int, dtype Dat
 		device:   CPU,
 		offset:   0,
 		mmapFile: f,
-		mmapData: mmapData,
+		mmapData: mmapData, // Keep the full mmap data for unmapping
 	}, nil
 }
 
