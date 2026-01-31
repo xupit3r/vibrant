@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"fmt"
+	"strings"
 	
 	ctxpkg "github.com/xupit3r/vibrant/internal/context"
 	"github.com/xupit3r/vibrant/internal/llm"

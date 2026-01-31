@@ -41,7 +41,6 @@ To enable real inference:
 - Run: CGO_ENABLED=1 go build -tags llama
 - Use with a real downloaded model
 
-Model path: %s
 Context size: %d tokens
 Threads: %d`, prompt, e.options.ContextSize, e.options.Threads)
 	
