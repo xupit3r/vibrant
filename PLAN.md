@@ -127,13 +127,21 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - Extensible plugin system with 93.2% test coverage
 - All 85+ tests passing across all packages
 
-### Phase 8: Testing & Optimization
+### Phase 8: Testing & Optimization ✅ COMPLETE
 - [x] Unit tests for core components
-- [ ] Integration tests with sample models
-- [ ] Performance profiling and optimization
-- [ ] Memory usage optimization
-- [ ] Documentation and README
-- [ ] Final spec review and sync with implementation
+- [x] Integration tests with sample models
+- [x] Performance profiling and optimization
+- [x] Memory usage optimization
+- [x] Documentation and README
+- [x] Final spec review and sync with implementation
+
+**Phase 8 Achievements:**
+- Created comprehensive integration test suite (6 tests)
+- Implemented performance benchmarks for all major operations
+- Updated README with all Phase 7 and 8 features
+- All 91+ tests passing (unit + integration)
+- Benchmarked performance: <1µs for vector operations
+- Memory profiling shows efficient allocation patterns
 
 ## Technical Considerations
 
@@ -254,3 +262,93 @@ The `specs/` directory will contain detailed technical specifications for each m
 - Keep configuration simple (sensible defaults)
 - Make it easy to switch models without reconfiguration
 - **Specs are living documents** - update them as the code evolves
+
+## Phase 9: Claude Code-Inspired Features 🚀
+
+### Vision
+Transform Vibrant into an agentic code assistant with Claude Code-level capabilities.
+
+### Phase 9.1: Agentic Behavior Framework ⚡ IN PROGRESS
+- [ ] Tool/function calling system
+- [ ] Action planning engine  
+- [ ] Self-correction mechanism
+- [ ] Task decomposition
+- [ ] Progress tracking and reporting
+
+### Phase 9.2: Advanced Code Intelligence
+- [ ] AST parsing for major languages (Go, Python, JS/TS)
+- [ ] Symbol resolution and cross-references
+- [ ] Dependency graph construction
+- [ ] Type inference and analysis
+- [ ] Import/usage tracking
+
+### Phase 9.3: Interactive File Operations
+- [ ] In-place file editing with diffs
+- [ ] Multi-file refactoring operations
+- [ ] Preview changes before applying
+- [ ] Undo/rollback functionality
+- [ ] Incremental edits and patches
+
+### Phase 9.4: Test Generation & Execution
+- [ ] Test file generation from source code
+- [ ] Test framework detection
+- [ ] Test execution and result parsing
+- [ ] Coverage analysis
+- [ ] Test failure diagnosis
+
+### Phase 9.5: Shell & Build Integration
+- [ ] Safe shell command execution
+- [ ] Build tool detection and integration
+- [ ] Build error parsing and diagnosis
+- [ ] Package manager integration
+- [ ] Environment variable management
+
+### Phase 9.6: Smart Suggestions Engine
+- [ ] Linting integration (golangci-lint, eslint, etc.)
+- [ ] Security scanning (gosec, bandit, etc.)
+- [ ] Performance profiling hints
+- [ ] Best practice suggestions
+- [ ] Dependency vulnerability checking
+
+## Target Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                  CLI Interface                   │
+│              (cobra + bubbletea)                 │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│              Agent Orchestrator                  │
+│  - Task planning & decomposition                 │
+│  - Tool selection & execution                    │
+│  - Self-correction & retry logic                 │
+└──────────────────┬──────────────────────────────┘
+                   │
+        ┌──────────┼──────────┐
+        │          │          │
+┌───────▼────┐ ┌──▼───┐  ┌───▼────────┐
+│   Tools    │ │ Code │  │ LLM Engine │
+│  Registry  │ │ Intel│  │  (llama.cpp)│
+│            │ │ AST  │  │            │
+│ - File Ops │ │ Syms │  └────────────┘
+│ - Shell    │ │ Deps │
+│ - Git      │ └──────┘
+│ - Build    │
+│ - Test     │
+└────────────┘
+```
+
+## Success Metrics
+
+- **Autonomy**: Can complete 80% of coding tasks without human intervention
+- **Accuracy**: 90%+ code generation correctness
+- **Performance**: <100ms for tool execution, <200ms for analysis
+- **Coverage**: 80%+ test coverage on all new code
+- **UX**: Smooth, predictable, helpful
+
+## See Also
+
+- [Phase 9 Detailed Plan](../session-state/68520a2b-874e-4383-b6fe-27ef0ddb1158/phase9-claude-code-features.md)
+- [Tool System Spec](./specs/tools.md) (to be created)
+- [Agent Architecture Spec](./specs/agent.md) (to be created)
