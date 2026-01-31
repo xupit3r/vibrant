@@ -120,10 +120,22 @@ func (a *Attention) Forward(x *tensor.Tensor, positions []int, useCache bool) (*
 	q, _ = a.rope.ApplyRotation(q, positions)
 	k, _ = a.rope.ApplyRotation(k, positions)
 
-	// If using cache, update and concatenate
+	// If using cache, concatenate with cached K/V
 	if useCache {
-		// For now, simple implementation without cache
-		// TODO: Add KV-cache support in future iteration
+		if a.kCache != nil && a.cacheLen > 0 {
+			// Concatenate cached K/V with new K/V along sequence dimension
+			// Cached: [batch, num_kv_heads, cache_len, head_dim]
+			// New: [batch, num_kv_heads, seq_len, head_dim]
+			// Result: [batch, num_kv_heads, cache_len + seq_len, head_dim]
+			k = concatenateSeqDim(a.kCache, k, a.cacheLen)
+			v = concatenateSeqDim(a.vCache, v, a.cacheLen)
+		}
+
+		// Update cache with full K/V (including new tokens)
+		// Store for next iteration
+		a.kCache = k
+		a.vCache = v
+		a.cacheLen = k.Shape()[2] // seq dimension
 	}
 
 	// Expand K and V for Grouped-Query Attention
@@ -373,4 +385,54 @@ func applySoftmax(scores *tensor.Tensor) {
 			}
 		}
 	}
+}
+
+// concatenateSeqDim concatenates two tensors along the sequence dimension
+// cached: [batch, heads, cache_len, head_dim]
+// new: [batch, heads, seq_len, head_dim]
+// -> [batch, heads, cache_len + seq_len, head_dim]
+func concatenateSeqDim(cached, new *tensor.Tensor, cacheLen int) *tensor.Tensor {
+	cachedShape := cached.Shape()
+	newShape := new.Shape()
+
+	batch := cachedShape[0]
+	heads := cachedShape[1]
+	newSeqLen := newShape[2]
+	headDim := cachedShape[3]
+
+	totalSeqLen := cacheLen + newSeqLen
+	result := tensor.NewTensor([]int{batch, heads, totalSeqLen, headDim}, cached.DType())
+
+	// Copy cached values
+	for b := 0; b < batch; b++ {
+		for h := 0; h < heads; h++ {
+			for s := 0; s < cacheLen; s++ {
+				for d := 0; d < headDim; d++ {
+					val := cached.At(b, h, s, d)
+					result.Set(val, b, h, s, d)
+				}
+			}
+		}
+	}
+
+	// Copy new values
+	for b := 0; b < batch; b++ {
+		for h := 0; h < heads; h++ {
+			for s := 0; s < newSeqLen; s++ {
+				for d := 0; d < headDim; d++ {
+					val := new.At(b, h, s, d)
+					result.Set(val, b, h, cacheLen+s, d)
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// ClearCache clears the KV-cache for this attention layer
+func (a *Attention) ClearCache() {
+	a.kCache = nil
+	a.vCache = nil
+	a.cacheLen = 0
 }

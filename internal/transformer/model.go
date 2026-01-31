@@ -143,3 +143,10 @@ func (m *Model) Config() *Config {
 func (m *Model) NumLayers() int {
 	return len(m.layers)
 }
+
+// ClearCache clears the KV-cache for all layers
+func (m *Model) ClearCache() {
+	for _, layer := range m.layers {
+		layer.ClearCache()
+	}
+}

@@ -112,3 +112,8 @@ func addTensors(a, b *tensor.Tensor) *tensor.Tensor {
 	// Element-wise addition using tensor library
 	return tensor.Add(a, b)
 }
+
+// ClearCache clears the KV-cache for this layer
+func (l *TransformerLayer) ClearCache() {
+	l.attn.ClearCache()
+}

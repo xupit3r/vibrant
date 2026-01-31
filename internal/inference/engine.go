@@ -14,7 +14,6 @@ import (
 type Engine struct {
 	model     *transformer.Model
 	tokenizer *tokenizer.Tokenizer
-	cache     *KVCache
 	sampler   *Sampler
 	config    *Config
 }
@@ -55,23 +54,12 @@ func NewEngine(ggufPath string, config *Config) (*Engine, error) {
 		return nil, fmt.Errorf("failed to load tokenizer: %w", err)
 	}
 
-	// Create KV-cache
-	modelConfig := model.Config()
-	cache := NewKVCache(
-		modelConfig.NumLayers,
-		1, // batch_size = 1 for now
-		modelConfig.ContextLength,
-		modelConfig.NumHeads,
-		modelConfig.HeadDim,
-	)
-
 	// Create sampler
 	sampler := NewSampler(config.Temperature, config.TopP, config.TopK, config.Seed)
 
 	return &Engine{
 		model:     model,
 		tokenizer: tok,
-		cache:     cache,
 		sampler:   sampler,
 		config:    config,
 	}, nil
@@ -80,7 +68,7 @@ func NewEngine(ggufPath string, config *Config) (*Engine, error) {
 // Generate produces text completion for the given prompt (blocking)
 func (e *Engine) Generate(ctx context.Context, prompt string, opts GenerateOptions) (string, error) {
 	// Clear cache for new generation
-	e.cache.Clear()
+	e.model.ClearCache()
 
 	// Tokenize prompt
 	tokens := e.tokenizer.Encode(prompt, true, false) // addBOS=true, addEOS=false
@@ -154,7 +142,7 @@ func (e *Engine) GenerateStream(ctx context.Context, prompt string, opts Generat
 		defer close(ch)
 
 		// Clear cache for new generation
-		e.cache.Clear()
+		e.model.ClearCache()
 
 		// Tokenize prompt
 		tokens := e.tokenizer.Encode(prompt, true, false) // addBOS=true, addEOS=false
@@ -228,7 +216,7 @@ func (e *Engine) TokenCount(text string) int {
 // Close releases resources held by the engine
 func (e *Engine) Close() error {
 	// Clear cache
-	e.cache.Clear()
+	e.model.ClearCache()
 	return nil
 }
 
