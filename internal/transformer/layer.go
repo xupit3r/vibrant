@@ -109,19 +109,6 @@ func (l *TransformerLayer) Forward(x *tensor.Tensor, positions []int, useCache b
 
 // Helper: add two tensors element-wise (residual connection)
 func addTensors(a, b *tensor.Tensor) *tensor.Tensor {
-	// Element-wise addition
-	// For now, create output with same shape
-	// Proper implementation would use tensor.Add
-	shape := a.Shape()
-	output := tensor.NewTensor(shape, tensor.Float32)
-
-	// Simple element-wise addition
-	// In production, this would use optimized tensor operations
-	totalElements := 1
-	for _, dim := range shape {
-		totalElements *= dim
-	}
-
-	// Simplified - actual implementation would properly iterate
-	return output
+	// Element-wise addition using tensor library
+	return tensor.Add(a, b)
 }

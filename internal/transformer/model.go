@@ -121,8 +121,15 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	}
 
 	// 4. Project to vocabulary (compute logits)
-	// logits = hidden @ output_weight^T
-	logits := matmul2D(hidden, m.outputWeight)
+	// hidden: [batch, seq, hidden_dim], output_weight: [hidden_dim, vocab_size]
+	// logits = hidden @ output_weight -> [batch, seq, vocab_size]
+	shape := hidden.Shape()
+	batchSize := shape[0]
+	hiddenDim := shape[2]
+
+	hiddenFlat := tensor.Reshape(hidden, []int{batchSize * seqLen, hiddenDim})
+	logitsFlat := tensor.MatMul(hiddenFlat, m.outputWeight)
+	logits := tensor.Reshape(logitsFlat, []int{batchSize, seqLen, m.config.VocabSize})
 
 	return logits, nil
 }

@@ -62,11 +62,16 @@ func (f *FeedForward) Forward(x *tensor.Tensor) (*tensor.Tensor, error) {
 	batchSize := shape[0]
 	seqLen := shape[1]
 
-	// Gate projection
-	gateProj := matmul2D(x, f.gate) // [batch, seq, intermediate_dim]
+	// Flatten batch dimension for matmul: [batch*seq, hidden_dim]
+	xFlat := tensor.Reshape(x, []int{batchSize * seqLen, f.hiddenDim})
 
-	// Up projection
-	upProj := matmul2D(x, f.up) // [batch, seq, intermediate_dim]
+	// Gate projection: [batch*seq, intermediate_dim]
+	gateProjFlat := tensor.MatMul(xFlat, f.gate)
+	gateProj := tensor.Reshape(gateProjFlat, []int{batchSize, seqLen, f.intermediateDim})
+
+	// Up projection: [batch*seq, intermediate_dim]
+	upProjFlat := tensor.MatMul(xFlat, f.up)
+	upProj := tensor.Reshape(upProjFlat, []int{batchSize, seqLen, f.intermediateDim})
 
 	// Apply SwiGLU: swish(gate) * up
 	// swish(x) = x * sigmoid(x)
@@ -89,8 +94,10 @@ func (f *FeedForward) Forward(x *tensor.Tensor) (*tensor.Tensor, error) {
 		}
 	}
 
-	// Down projection
-	output := matmul2D(swiglu, f.down) // [batch, seq, hidden_dim]
+	// Down projection: [batch*seq, hidden_dim]
+	swigluFlat := tensor.Reshape(swiglu, []int{batchSize * seqLen, f.intermediateDim})
+	outputFlat := tensor.MatMul(swigluFlat, f.down)
+	output := tensor.Reshape(outputFlat, []int{batchSize, seqLen, f.hiddenDim})
 
 	return output, nil
 }

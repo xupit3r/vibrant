@@ -280,3 +280,280 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+// Test Attention layer forward pass
+func TestAttention_ForwardShape(t *testing.T) {
+	cfg := createMockConfig()
+	cfg.NumHeads = 4
+	cfg.NumKVHeads = 4
+	cfg.HeadDim = 32
+	cfg.HiddenDim = 128
+
+	// Create mock attention layer
+	attn := &Attention{
+		wq:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumHeads * cfg.HeadDim}, tensor.Float32),
+		wk:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumKVHeads * cfg.HeadDim}, tensor.Float32),
+		wv:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumKVHeads * cfg.HeadDim}, tensor.Float32),
+		wo:         tensor.NewTensor([]int{cfg.NumHeads * cfg.HeadDim, cfg.HiddenDim}, tensor.Float32),
+		numHeads:   cfg.NumHeads,
+		numKVHeads: cfg.NumKVHeads,
+		headDim:    cfg.HeadDim,
+		hiddenDim:  cfg.HiddenDim,
+		rope:       NewRoPE(cfg.HeadDim, cfg.RopeFreqBase, cfg.ContextLength),
+	}
+
+	// Initialize weights with small values
+	initTensor(attn.wq, 0.01)
+	initTensor(attn.wk, 0.01)
+	initTensor(attn.wv, 0.01)
+	initTensor(attn.wo, 0.01)
+
+	// Create input tensor [batch=1, seq=4, hidden=128]
+	batchSize := 1
+	seqLen := 4
+	input := tensor.NewTensor([]int{batchSize, seqLen, cfg.HiddenDim}, tensor.Float32)
+	initTensor(input, 0.1)
+
+	positions := []int{0, 1, 2, 3}
+
+	// Forward pass
+	output, err := attn.Forward(input, positions, false)
+	if err != nil {
+		t.Fatalf("Attention forward failed: %v", err)
+	}
+
+	// Check output shape
+	expectedShape := []int{batchSize, seqLen, cfg.HiddenDim}
+	if !shapesEqual(output.Shape(), expectedShape) {
+		t.Errorf("Expected shape %v, got %v", expectedShape, output.Shape())
+	}
+}
+
+// Test Attention layer with GQA
+func TestAttention_ForwardGQA(t *testing.T) {
+	cfg := createMockConfig()
+	cfg.NumHeads = 8
+	cfg.NumKVHeads = 2 // GQA: 4 query heads per KV head
+	cfg.HeadDim = 32
+	cfg.HiddenDim = 256
+
+	// Create mock attention layer with GQA
+	attn := &Attention{
+		wq:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumHeads * cfg.HeadDim}, tensor.Float32),
+		wk:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumKVHeads * cfg.HeadDim}, tensor.Float32),
+		wv:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumKVHeads * cfg.HeadDim}, tensor.Float32),
+		wo:         tensor.NewTensor([]int{cfg.NumHeads * cfg.HeadDim, cfg.HiddenDim}, tensor.Float32),
+		numHeads:   cfg.NumHeads,
+		numKVHeads: cfg.NumKVHeads,
+		headDim:    cfg.HeadDim,
+		hiddenDim:  cfg.HiddenDim,
+		rope:       NewRoPE(cfg.HeadDim, cfg.RopeFreqBase, cfg.ContextLength),
+	}
+
+	initTensor(attn.wq, 0.01)
+	initTensor(attn.wk, 0.01)
+	initTensor(attn.wv, 0.01)
+	initTensor(attn.wo, 0.01)
+
+	// Create input tensor [batch=2, seq=3, hidden=256]
+	batchSize := 2
+	seqLen := 3
+	input := tensor.NewTensor([]int{batchSize, seqLen, cfg.HiddenDim}, tensor.Float32)
+	initTensor(input, 0.1)
+
+	positions := []int{0, 1, 2}
+
+	// Forward pass with GQA
+	output, err := attn.Forward(input, positions, false)
+	if err != nil {
+		t.Fatalf("Attention GQA forward failed: %v", err)
+	}
+
+	// Check output shape
+	expectedShape := []int{batchSize, seqLen, cfg.HiddenDim}
+	if !shapesEqual(output.Shape(), expectedShape) {
+		t.Errorf("Expected shape %v, got %v", expectedShape, output.Shape())
+	}
+}
+
+// Test FeedForward layer forward pass
+func TestFeedForward_Forward(t *testing.T) {
+	cfg := createMockConfig()
+	cfg.HiddenDim = 128
+	cfg.IntermediateDim = 512
+
+	// Create mock FFN layer
+	ffn := &FeedForward{
+		gate:            tensor.NewTensor([]int{cfg.HiddenDim, cfg.IntermediateDim}, tensor.Float32),
+		up:              tensor.NewTensor([]int{cfg.HiddenDim, cfg.IntermediateDim}, tensor.Float32),
+		down:            tensor.NewTensor([]int{cfg.IntermediateDim, cfg.HiddenDim}, tensor.Float32),
+		hiddenDim:       cfg.HiddenDim,
+		intermediateDim: cfg.IntermediateDim,
+	}
+
+	initTensor(ffn.gate, 0.01)
+	initTensor(ffn.up, 0.01)
+	initTensor(ffn.down, 0.01)
+
+	// Create input tensor [batch=1, seq=4, hidden=128]
+	batchSize := 1
+	seqLen := 4
+	input := tensor.NewTensor([]int{batchSize, seqLen, cfg.HiddenDim}, tensor.Float32)
+	initTensor(input, 0.1)
+
+	// Forward pass
+	output, err := ffn.Forward(input)
+	if err != nil {
+		t.Fatalf("FeedForward forward failed: %v", err)
+	}
+
+	// Check output shape
+	expectedShape := []int{batchSize, seqLen, cfg.HiddenDim}
+	if !shapesEqual(output.Shape(), expectedShape) {
+		t.Errorf("Expected shape %v, got %v", expectedShape, output.Shape())
+	}
+}
+
+// Test FeedForward with invalid input shape
+func TestFeedForward_InvalidShape(t *testing.T) {
+	cfg := createMockConfig()
+	ffn := &FeedForward{
+		gate:            tensor.NewTensor([]int{cfg.HiddenDim, cfg.IntermediateDim}, tensor.Float32),
+		up:              tensor.NewTensor([]int{cfg.HiddenDim, cfg.IntermediateDim}, tensor.Float32),
+		down:            tensor.NewTensor([]int{cfg.IntermediateDim, cfg.HiddenDim}, tensor.Float32),
+		hiddenDim:       cfg.HiddenDim,
+		intermediateDim: cfg.IntermediateDim,
+	}
+
+	// Create 2D input (invalid - expects 3D)
+	input := tensor.NewTensor([]int{4, cfg.HiddenDim}, tensor.Float32)
+
+	_, err := ffn.Forward(input)
+	if err == nil {
+		t.Error("Expected error for invalid input shape, got nil")
+	}
+}
+
+// Test TransformerLayer forward pass
+func TestTransformerLayer_Forward(t *testing.T) {
+	cfg := createMockConfig()
+	cfg.NumHeads = 4
+	cfg.NumKVHeads = 4
+	cfg.HeadDim = 32
+	cfg.HiddenDim = 128
+	cfg.IntermediateDim = 512
+
+	// Create mock layer components
+	attn := &Attention{
+		wq:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumHeads * cfg.HeadDim}, tensor.Float32),
+		wk:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumKVHeads * cfg.HeadDim}, tensor.Float32),
+		wv:         tensor.NewTensor([]int{cfg.HiddenDim, cfg.NumKVHeads * cfg.HeadDim}, tensor.Float32),
+		wo:         tensor.NewTensor([]int{cfg.NumHeads * cfg.HeadDim, cfg.HiddenDim}, tensor.Float32),
+		numHeads:   cfg.NumHeads,
+		numKVHeads: cfg.NumKVHeads,
+		headDim:    cfg.HeadDim,
+		hiddenDim:  cfg.HiddenDim,
+		rope:       NewRoPE(cfg.HeadDim, cfg.RopeFreqBase, cfg.ContextLength),
+	}
+
+	initTensor(attn.wq, 0.01)
+	initTensor(attn.wk, 0.01)
+	initTensor(attn.wv, 0.01)
+	initTensor(attn.wo, 0.01)
+
+	ffn := &FeedForward{
+		gate:            tensor.NewTensor([]int{cfg.HiddenDim, cfg.IntermediateDim}, tensor.Float32),
+		up:              tensor.NewTensor([]int{cfg.HiddenDim, cfg.IntermediateDim}, tensor.Float32),
+		down:            tensor.NewTensor([]int{cfg.IntermediateDim, cfg.HiddenDim}, tensor.Float32),
+		hiddenDim:       cfg.HiddenDim,
+		intermediateDim: cfg.IntermediateDim,
+	}
+
+	initTensor(ffn.gate, 0.01)
+	initTensor(ffn.up, 0.01)
+	initTensor(ffn.down, 0.01)
+
+	attnNormWeight := tensor.NewTensor([]int{cfg.HiddenDim}, tensor.Float32)
+	ffnNormWeight := tensor.NewTensor([]int{cfg.HiddenDim}, tensor.Float32)
+	initTensor(attnNormWeight, 1.0)
+	initTensor(ffnNormWeight, 1.0)
+
+	attnNorm, _ := NewRMSNorm(attnNormWeight, cfg.RMSNormEps)
+	ffnNorm, _ := NewRMSNorm(ffnNormWeight, cfg.RMSNormEps)
+
+	layer := &TransformerLayer{
+		layerIdx: 0,
+		attn:     attn,
+		ffn:      ffn,
+		attnNorm: attnNorm,
+		ffnNorm:  ffnNorm,
+	}
+
+	// Create input tensor [batch=1, seq=4, hidden=128]
+	batchSize := 1
+	seqLen := 4
+	input := tensor.NewTensor([]int{batchSize, seqLen, cfg.HiddenDim}, tensor.Float32)
+	initTensor(input, 0.1)
+
+	positions := []int{0, 1, 2, 3}
+
+	// Forward pass
+	output, err := layer.Forward(input, positions, false)
+	if err != nil {
+		t.Fatalf("TransformerLayer forward failed: %v", err)
+	}
+
+	// Check output shape
+	expectedShape := []int{batchSize, seqLen, cfg.HiddenDim}
+	if !shapesEqual(output.Shape(), expectedShape) {
+		t.Errorf("Expected shape %v, got %v", expectedShape, output.Shape())
+	}
+}
+
+// Helper: initialize tensor with a constant value
+func initTensor(t *tensor.Tensor, val float64) {
+	shape := t.Shape()
+	switch len(shape) {
+	case 1:
+		for i := 0; i < shape[0]; i++ {
+			t.Set(float32(val), i)
+		}
+	case 2:
+		for i := 0; i < shape[0]; i++ {
+			for j := 0; j < shape[1]; j++ {
+				t.Set(float32(val), i, j)
+			}
+		}
+	case 3:
+		for i := 0; i < shape[0]; i++ {
+			for j := 0; j < shape[1]; j++ {
+				for k := 0; k < shape[2]; k++ {
+					t.Set(float32(val), i, j, k)
+				}
+			}
+		}
+	case 4:
+		for i := 0; i < shape[0]; i++ {
+			for j := 0; j < shape[1]; j++ {
+				for k := 0; k < shape[2]; k++ {
+					for l := 0; l < shape[3]; l++ {
+						t.Set(float32(val), i, j, k, l)
+					}
+				}
+			}
+		}
+	}
+}
+
+// Helper: compare shapes
+func shapesEqual(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
