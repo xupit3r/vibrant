@@ -363,6 +363,43 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 - **Embedded inference** (single binary, no external daemon)
 - **Foundation for bleeding-edge research** integration
 
+### Development Requirements
+
+**🧪 Testing Discipline**:
+- **Write tests for ALL new features** before moving on
+- **All tests MUST pass** before committing
+- **No phase progression** until tests achieve 95%+ coverage for that phase
+- **Run full test suite** before each commit: `make test`
+- **Include benchmarks** for performance-critical operations
+
+**📝 Documentation Requirements**:
+- Update specs BEFORE implementing features (design-first)
+- Keep specs in sync with code (review after implementation)
+- Document all public APIs with godoc comments
+- Include code examples in documentation
+
+**🔄 Commit Discipline**:
+- **Commit frequently** (after each working feature/sub-feature)
+- Use conventional commit format (feat:, test:, docs:, refactor:, etc.)
+- **NO commits with failing tests** - tests must be green
+- **Push after each phase completes** to share progress
+- Include Co-Authored-By tag for all commits
+
+**✅ Definition of Done (per phase)**:
+1. Implementation complete
+2. Tests written with 95%+ coverage
+3. All tests passing (unit + integration)
+4. Benchmarks added for critical paths
+5. Specs updated to match reality
+6. Documentation complete
+7. Code committed and pushed
+
+**🎯 Quality Gates**:
+- Tests must pass: `go test ./... -v`
+- Coverage check: `go test ./... -cover` (≥95% for new packages)
+- Benchmarks baseline: `go test ./... -bench=. -benchmem`
+- Linting clean: `make lint`
+
 ### Timeline: 8-9 Months to Production-Ready
 
 #### Phase 10.1: Tensor Library Foundation (Months 1-3) 🔨 IN PROGRESS

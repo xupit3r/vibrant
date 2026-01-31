@@ -1,0 +1,393 @@
+package tensor
+
+import (
+	"fmt"
+	"math"
+	"os"
+	"syscall"
+	"unsafe"
+)
+
+// DataType represents the data type of tensor elements
+type DataType int
+
+const (
+	Float32 DataType = iota // 32-bit floating point
+	Float16                 // 16-bit floating point
+	Q4_K                    // 4-bit k-quant
+	Q5_K                    // 5-bit k-quant
+	Q8_0                    // 8-bit quantization
+)
+
+// String returns the name of the data type
+func (dt DataType) String() string {
+	switch dt {
+	case Float32:
+		return "float32"
+	case Float16:
+		return "float16"
+	case Q4_K:
+		return "q4_k"
+	case Q5_K:
+		return "q5_k"
+	case Q8_0:
+		return "q8_0"
+	default:
+		return "unknown"
+	}
+}
+
+// BytesPerElement returns the number of bytes per element for this type
+func (dt DataType) BytesPerElement() int {
+	switch dt {
+	case Float32:
+		return 4
+	case Float16:
+		return 2
+	case Q8_0:
+		return 1 // Approximate (actual is quantized blocks)
+	case Q4_K, Q5_K:
+		return 1 // Approximate (actual is quantized blocks)
+	default:
+		return 4
+	}
+}
+
+// Device represents the compute device
+type Device int
+
+const (
+	CPU Device = iota // CPU device
+	GPU               // GPU device (future)
+)
+
+// String returns the name of the device
+func (d Device) String() string {
+	switch d {
+	case CPU:
+		return "cpu"
+	case GPU:
+		return "gpu"
+	default:
+		return "unknown"
+	}
+}
+
+// Tensor represents a multi-dimensional array
+type Tensor struct {
+	data   interface{} // Underlying data ([]float32, []float16, []uint8, etc.)
+	shape  []int       // Dimensions [batch, seq_len, hidden_dim, ...]
+	stride []int       // Memory layout strides for indexing
+	dtype  DataType    // Data type
+	device Device      // Compute device
+	offset int         // Offset in data array (for views/slices)
+
+	// Memory-mapped file info (if applicable)
+	mmapFile *os.File
+	mmapData []byte
+}
+
+// NewTensor creates a new tensor with the given shape and data type
+func NewTensor(shape []int, dtype DataType) *Tensor {
+	// Calculate total elements
+	size := 1
+	for _, dim := range shape {
+		size *= dim
+	}
+
+	// Allocate data based on type
+	var data interface{}
+	switch dtype {
+	case Float32:
+		data = make([]float32, size)
+	case Float16:
+		data = make([]uint16, size) // float16 stored as uint16
+	case Q8_0, Q4_K, Q5_K:
+		// For quantized types, allocate enough bytes
+		// Actual allocation depends on block structure
+		data = make([]uint8, size)
+	default:
+		data = make([]float32, size)
+	}
+
+	return &Tensor{
+		data:   data,
+		shape:  shape,
+		stride: computeStrides(shape),
+		dtype:  dtype,
+		device: CPU,
+		offset: 0,
+	}
+}
+
+// NewTensorFromData creates a tensor from existing data
+func NewTensorFromData(data interface{}, shape []int) *Tensor {
+	// Infer data type from data
+	var dtype DataType
+	switch data.(type) {
+	case []float32:
+		dtype = Float32
+	case []uint16:
+		dtype = Float16
+	case []uint8:
+		dtype = Q8_0 // Default for byte arrays
+	default:
+		dtype = Float32
+	}
+
+	return &Tensor{
+		data:   data,
+		shape:  shape,
+		stride: computeStrides(shape),
+		dtype:  dtype,
+		device: CPU,
+		offset: 0,
+	}
+}
+
+// NewTensorMmap creates a memory-mapped tensor from a file
+func NewTensorMmap(path string, offset int64, size int64, shape []int, dtype DataType) (*Tensor, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+
+	// Memory-map the file region
+	mmapData, err := syscall.Mmap(
+		int(f.Fd()),
+		offset,
+		int(size),
+		syscall.PROT_READ,
+		syscall.MAP_SHARED,
+	)
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("failed to mmap: %w", err)
+	}
+
+	// Wrap data based on dtype
+	var data interface{}
+	switch dtype {
+	case Float32:
+		// Cast []byte to []float32 using unsafe
+		data = (*[1 << 30]float32)(unsafe.Pointer(&mmapData[0]))[:len(mmapData)/4:len(mmapData)/4]
+	case Float16:
+		data = (*[1 << 30]uint16)(unsafe.Pointer(&mmapData[0]))[:len(mmapData)/2:len(mmapData)/2]
+	case Q4_K, Q5_K, Q8_0:
+		data = mmapData
+	default:
+		data = (*[1 << 30]float32)(unsafe.Pointer(&mmapData[0]))[:len(mmapData)/4:len(mmapData)/4]
+	}
+
+	return &Tensor{
+		data:     data,
+		shape:    shape,
+		stride:   computeStrides(shape),
+		dtype:    dtype,
+		device:   CPU,
+		offset:   0,
+		mmapFile: f,
+		mmapData: mmapData,
+	}, nil
+}
+
+// Zeros creates a zero-initialized tensor
+func Zeros(shape []int, dtype DataType) *Tensor {
+	// NewTensor already initializes to zero
+	return NewTensor(shape, dtype)
+}
+
+// Ones creates a one-initialized tensor
+func Ones(shape []int, dtype DataType) *Tensor {
+	t := NewTensor(shape, dtype)
+
+	// Set all elements to 1
+	switch dtype {
+	case Float32:
+		data := t.data.([]float32)
+		for i := range data {
+			data[i] = 1.0
+		}
+	case Float16:
+		data := t.data.([]uint16)
+		one := float32ToFloat16(1.0)
+		for i := range data {
+			data[i] = one
+		}
+	}
+
+	return t
+}
+
+// computeStrides calculates memory layout strides for the given shape
+func computeStrides(shape []int) []int {
+	strides := make([]int, len(shape))
+	if len(shape) == 0 {
+		return strides
+	}
+
+	// Row-major order (C-style)
+	strides[len(shape)-1] = 1
+	for i := len(shape) - 2; i >= 0; i-- {
+		strides[i] = strides[i+1] * shape[i+1]
+	}
+
+	return strides
+}
+
+// Shape returns the tensor's shape
+func (t *Tensor) Shape() []int {
+	return t.shape
+}
+
+// Stride returns the tensor's strides
+func (t *Tensor) Stride() []int {
+	return t.stride
+}
+
+// DType returns the tensor's data type
+func (t *Tensor) DType() DataType {
+	return t.dtype
+}
+
+// Device returns the tensor's device
+func (t *Tensor) Device() Device {
+	return t.device
+}
+
+// Size returns the total number of elements
+func (t *Tensor) Size() int {
+	size := 1
+	for _, dim := range t.shape {
+		size *= dim
+	}
+	return size
+}
+
+// NumDims returns the number of dimensions
+func (t *Tensor) NumDims() int {
+	return len(t.shape)
+}
+
+// At returns the value at the given multi-dimensional index
+func (t *Tensor) At(indices ...int) float32 {
+	if len(indices) != len(t.shape) {
+		panic(fmt.Sprintf("expected %d indices, got %d", len(t.shape), len(indices)))
+	}
+
+	// Compute linear index
+	idx := t.offset
+	for i, index := range indices {
+		if index < 0 || index >= t.shape[i] {
+			panic(fmt.Sprintf("index %d out of bounds for dimension %d (size %d)", index, i, t.shape[i]))
+		}
+		idx += index * t.stride[i]
+	}
+
+	// Return value based on dtype
+	switch t.dtype {
+	case Float32:
+		return t.data.([]float32)[idx]
+	case Float16:
+		return float16ToFloat32(t.data.([]uint16)[idx])
+	default:
+		panic(fmt.Sprintf("At() not supported for dtype %s", t.dtype))
+	}
+}
+
+// Set sets the value at the given multi-dimensional index
+func (t *Tensor) Set(value float32, indices ...int) {
+	if len(indices) != len(t.shape) {
+		panic(fmt.Sprintf("expected %d indices, got %d", len(t.shape), len(indices)))
+	}
+
+	// Compute linear index
+	idx := t.offset
+	for i, index := range indices {
+		if index < 0 || index >= t.shape[i] {
+			panic(fmt.Sprintf("index %d out of bounds for dimension %d (size %d)", index, i, t.shape[i]))
+		}
+		idx += index * t.stride[i]
+	}
+
+	// Set value based on dtype
+	switch t.dtype {
+	case Float32:
+		t.data.([]float32)[idx] = value
+	case Float16:
+		t.data.([]uint16)[idx] = float32ToFloat16(value)
+	default:
+		panic(fmt.Sprintf("Set() not supported for dtype %s", t.dtype))
+	}
+}
+
+// Data returns the underlying data (use with caution)
+func (t *Tensor) Data() interface{} {
+	return t.data
+}
+
+// Close releases resources (unmaps memory if needed)
+func (t *Tensor) Close() error {
+	if t.mmapFile != nil {
+		if err := syscall.Munmap(t.mmapData); err != nil {
+			return err
+		}
+		if err := t.mmapFile.Close(); err != nil {
+			return err
+		}
+		t.mmapFile = nil
+		t.mmapData = nil
+	}
+	return nil
+}
+
+// float16 conversion helpers (simplified IEEE 754 half-precision)
+func float32ToFloat16(f float32) uint16 {
+	// Handle special case of 0.0
+	if f == 0.0 {
+		return 0
+	}
+
+	// Simplified conversion (not full IEEE 754)
+	// For now, just truncate mantissa
+	bits := *(*uint32)(unsafe.Pointer(&f))
+	sign := (bits >> 31) & 0x1
+	exp := int32((bits>>23)&0xFF) - 127 + 15
+	mantissa := (bits >> 13) & 0x3FF
+
+	if exp <= 0 {
+		return uint16(sign << 15) // Underflow to zero
+	}
+	if exp >= 31 {
+		return uint16((sign << 15) | 0x7C00) // Overflow to infinity
+	}
+
+	return uint16((sign << 15) | (uint32(exp) << 10) | mantissa)
+}
+
+func float16ToFloat32(h uint16) float32 {
+	// Simplified conversion (not full IEEE 754)
+	sign := uint32((h >> 15) & 0x1)
+	exp := uint32((h >> 10) & 0x1F)
+	mantissa := uint32(h & 0x3FF)
+
+	if exp == 0 {
+		// Zero or subnormal
+		return 0.0
+	}
+	if exp == 31 {
+		// Infinity or NaN
+		if mantissa == 0 {
+			if sign == 1 {
+				return float32(math.Inf(-1))
+			}
+			return float32(math.Inf(1))
+		}
+		return float32(math.NaN())
+	}
+
+	// Normal number
+	exp = exp - 15 + 127
+	bits := (sign << 31) | (exp << 23) | (mantissa << 13)
+	return *(*float32)(unsafe.Pointer(&bits))
+}
