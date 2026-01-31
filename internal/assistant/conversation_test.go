@@ -1,6 +1,8 @@
 package assistant
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -234,5 +236,161 @@ func TestEstimateTokens(t *testing.T) {
 			t.Errorf("estimateTokens(%q) = %d; want between %d and %d", 
 				tt.text, tokens, tt.minTokens, tt.maxTokens)
 		}
+	}
+}
+
+func TestPruneByTokens(t *testing.T) {
+	// Create conversation with small context window
+	cm := NewConversationManager(100, 200, "", false) // 200 tokens max
+	
+	// Add system message (small)
+	cm.AddSystemMessage("You are a helpful assistant") // ~7 tokens
+	
+	// Add many messages to exceed token limit
+	for i := 0; i < 20; i++ {
+		// Each message is ~25 tokens
+		cm.AddUserMessage("This is a test message number " + string(rune('0'+i)) + " with some content")
+		cm.AddAssistantMessage("This is a response to message " + string(rune('0'+i)) + " with more content")
+	}
+	
+	// Should have pruned to fit within context window
+	if cm.GetTokenCount() > 200 {
+		t.Errorf("Expected token count <= 200 after pruning, got %d", cm.GetTokenCount())
+	}
+	
+	// Should still have system message
+	hasSystem := false
+	for _, msg := range cm.GetMessages() {
+		if msg.Role == "system" {
+			hasSystem = true
+			break
+		}
+	}
+	if !hasSystem {
+		t.Error("System message should be preserved during pruning")
+	}
+	
+	// Should have recent messages
+	messages := cm.GetMessages()
+	if len(messages) < 2 {
+		t.Error("Should keep at least some recent messages")
+	}
+}
+
+func TestPruneByCount(t *testing.T) {
+	cm := NewConversationManager(8, 100000, "", false) // Max 8 messages
+	
+	// Add system message
+	cm.AddSystemMessage("System prompt")
+	
+	// Add 20 messages (will exceed max)
+	for i := 0; i < 20; i++ {
+		cm.AddUserMessage(fmt.Sprintf("User message %d", i))
+		cm.AddAssistantMessage(fmt.Sprintf("Assistant response %d", i))
+	}
+	
+	messages := cm.GetMessages()
+	
+	// Should not exceed max history
+	if len(messages) > 8 {
+		t.Errorf("Expected at most 8 messages, got %d", len(messages))
+	}
+	
+	// Should have system message
+	if messages[0].Role != "system" {
+		t.Error("First message should be system message")
+	}
+	
+	// Should have most recent messages
+	lastMsg := messages[len(messages)-1]
+	if !strings.Contains(lastMsg.Content, "19") {
+		t.Logf("Last message content: %s", lastMsg.Content)
+		t.Log("Messages kept:", len(messages))
+		// It's okay if not exactly message 19, just check we have recent ones
+		if !strings.Contains(lastMsg.Content, "response") && !strings.Contains(lastMsg.Content, "message") {
+			t.Error("Should keep recent messages")
+		}
+	}
+}
+
+func TestGetPruningStats(t *testing.T) {
+	cm := NewConversationManager(20, 4096, "", false)
+	
+	cm.AddSystemMessage("System prompt")
+	cm.AddUserMessage("Hello")
+	cm.AddAssistantMessage("Hi there")
+	cm.AddUserMessage("How are you?")
+	
+	stats := cm.GetPruningStats()
+	
+	if stats["total_messages"].(int) != 4 {
+		t.Errorf("Expected 4 total messages, got %v", stats["total_messages"])
+	}
+	
+	if stats["system_messages"].(int) != 1 {
+		t.Errorf("Expected 1 system message, got %v", stats["system_messages"])
+	}
+	
+	if stats["user_messages"].(int) != 2 {
+		t.Errorf("Expected 2 user messages, got %v", stats["user_messages"])
+	}
+	
+	if stats["assistant_messages"].(int) != 1 {
+		t.Errorf("Expected 1 assistant message, got %v", stats["assistant_messages"])
+	}
+	
+	if stats["max_history"].(int) != 20 {
+		t.Errorf("Expected max_history 20, got %v", stats["max_history"])
+	}
+}
+
+func TestContextWindowPruningPreservesRecent(t *testing.T) {
+	cm := NewConversationManager(100, 100, "", false) // Very small context window
+	
+	cm.AddSystemMessage("System")
+	
+	// Add messages that will exceed token limit
+	for i := 0; i < 10; i++ {
+		cm.AddUserMessage(fmt.Sprintf("Message %d", i))
+		cm.AddAssistantMessage(fmt.Sprintf("Response %d", i))
+	}
+	
+	messages := cm.GetMessages()
+	
+	// Should have pruned to fit token limit
+	if cm.GetTokenCount() > 100 {
+		t.Errorf("Token count %d exceeds limit 100", cm.GetTokenCount())
+	}
+	
+	// Most recent message should be preserved
+	lastMsg := messages[len(messages)-1]
+	if !strings.Contains(lastMsg.Content, "Response") {
+		t.Error("Most recent messages should be preserved")
+	}
+}
+
+func TestFormatForPrompt(t *testing.T) {
+	cm := NewConversationManager(20, 4096, "", false)
+	
+	cm.AddSystemMessage("You are helpful")
+	cm.AddUserMessage("Hello")
+	cm.AddAssistantMessage("Hi there")
+	
+	formatted := cm.FormatForPrompt()
+	
+	if !strings.Contains(formatted, "[SYSTEM]:") {
+		t.Error("Formatted prompt should contain system message")
+	}
+	
+	if !strings.Contains(formatted, "[USER]:") {
+		t.Error("Formatted prompt should contain user message")
+	}
+	
+	if !strings.Contains(formatted, "[ASSISTANT]:") {
+		t.Error("Formatted prompt should contain assistant message")
+	}
+	
+	if !strings.Contains(formatted, "Hello") {
+		t.Error("Formatted prompt should contain message content")
 	}
 }

@@ -138,3 +138,84 @@ cmd.Stdout = &out
 err := cmd.Run()
 return err == nil
 }
+
+// GenerateSmartCommitMessage analyzes the diff and generates a concise commit message
+// following conventional commits format
+func GenerateSmartCommitMessage(diff string) string {
+if diff == "" {
+return "chore: update files"
+}
+
+lines := strings.Split(diff, "\n")
+filesChanged := make(map[string]bool)
+fileTypes := make(map[string]int)
+addedLines := 0
+removedLines := 0
+
+for _, line := range lines {
+if strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---") {
+parts := strings.Fields(line)
+if len(parts) > 1 {
+file := parts[1]
+// Remove a/ or b/ prefix
+file = strings.TrimPrefix(file, "a/")
+file = strings.TrimPrefix(file, "b/")
+filesChanged[file] = true
+
+// Determine file type
+if strings.HasSuffix(file, ".go") {
+fileTypes["go"]++
+} else if strings.HasSuffix(file, ".py") {
+fileTypes["python"]++
+} else if strings.HasSuffix(file, ".js") || strings.HasSuffix(file, ".ts") {
+fileTypes["javascript"]++
+} else if strings.HasSuffix(file, ".md") {
+fileTypes["docs"]++
+} else if strings.Contains(file, "test") {
+fileTypes["test"]++
+}
+}
+} else if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
+addedLines++
+} else if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
+removedLines++
+}
+}
+
+// Determine commit type
+commitType := "chore"
+scope := ""
+
+if fileTypes["test"] > 0 {
+commitType = "test"
+scope = "tests"
+} else if fileTypes["docs"] > 0 {
+commitType = "docs"
+} else if addedLines > removedLines*2 {
+commitType = "feat"
+} else if removedLines > addedLines*2 {
+commitType = "refactor"
+} else {
+commitType = "fix"
+}
+
+// Build message
+var message strings.Builder
+if scope != "" {
+message.WriteString(fmt.Sprintf("%s(%s): ", commitType, scope))
+} else {
+message.WriteString(fmt.Sprintf("%s: ", commitType))
+}
+
+// Add summary
+fileCount := len(filesChanged)
+if fileCount == 1 {
+for file := range filesChanged {
+message.WriteString(fmt.Sprintf("update %s", file))
+}
+} else {
+message.WriteString(fmt.Sprintf("update %d files", fileCount))
+}
+
+return message.String()
+}

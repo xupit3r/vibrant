@@ -135,53 +135,124 @@ func (cm *ConversationManager) Clear() {
 func (cm *ConversationManager) pruneIfNeeded() error {
 	// Check message count limit
 	if cm.conversation.MaxHistory > 0 && len(cm.conversation.Messages) > cm.conversation.MaxHistory {
-		// Remove oldest messages (but keep system messages)
-		var pruned []Message
-		systemMessages := []Message{}
-		otherMessages := []Message{}
-		
-		for _, msg := range cm.conversation.Messages {
-			if msg.Role == "system" {
-				systemMessages = append(systemMessages, msg)
-			} else {
-				otherMessages = append(otherMessages, msg)
-			}
-		}
-		
-		// Keep system messages + most recent other messages
-		keepCount := cm.conversation.MaxHistory - len(systemMessages)
-		if keepCount < 0 {
-			keepCount = 0
-		}
-		
-		if len(otherMessages) > keepCount {
-			otherMessages = otherMessages[len(otherMessages)-keepCount:]
-		}
-		
-		pruned = append(systemMessages, otherMessages...)
-		cm.conversation.Messages = pruned
-		
-		// Recalculate total tokens
-		cm.recalculateTokens()
+		cm.pruneByCount()
 	}
 	
 	// Check context window limit
 	if cm.conversation.ContextWindow > 0 && cm.conversation.TotalTokens > cm.conversation.ContextWindow {
-		// Remove messages from the middle (keep system and recent messages)
-		for cm.conversation.TotalTokens > cm.conversation.ContextWindow && len(cm.conversation.Messages) > 2 {
-			// Find first non-system message to remove
-			for i, msg := range cm.conversation.Messages {
-				if msg.Role != "system" {
-					// Remove this message
-					cm.conversation.Messages = append(cm.conversation.Messages[:i], cm.conversation.Messages[i+1:]...)
-					cm.conversation.TotalTokens -= msg.Tokens
-					break
-				}
+		cm.pruneByTokens()
+	}
+	
+	return nil
+}
+
+// pruneByCount removes oldest messages while keeping system messages
+func (cm *ConversationManager) pruneByCount() {
+	systemMessages := []Message{}
+	otherMessages := []Message{}
+	
+	for _, msg := range cm.conversation.Messages {
+		if msg.Role == "system" {
+			systemMessages = append(systemMessages, msg)
+		} else {
+			otherMessages = append(otherMessages, msg)
+		}
+	}
+	
+	// Keep system messages + most recent other messages
+	keepCount := cm.conversation.MaxHistory - len(systemMessages)
+	if keepCount < 0 {
+		keepCount = 0
+	}
+	
+	if len(otherMessages) > keepCount {
+		otherMessages = otherMessages[len(otherMessages)-keepCount:]
+	}
+	
+	cm.conversation.Messages = append(systemMessages, otherMessages...)
+	cm.recalculateTokens()
+}
+
+// pruneByTokens removes messages to fit within context window
+func (cm *ConversationManager) pruneByTokens() {
+	targetTokens := int(float64(cm.conversation.ContextWindow) * 0.8) // Keep 80% buffer
+	
+	// Always keep system messages and most recent exchange
+	systemMessages := []Message{}
+	recentMessages := []Message{}
+	middleMessages := []Message{}
+	
+	messages := cm.conversation.Messages
+	if len(messages) == 0 {
+		return
+	}
+	
+	// Separate system messages
+	for i := 0; i < len(messages); i++ {
+		if messages[i].Role == "system" {
+			systemMessages = append(systemMessages, messages[i])
+		} else {
+			if i >= len(messages)-4 { // Keep last 2 exchanges (4 messages)
+				recentMessages = append(recentMessages, messages[i])
+			} else {
+				middleMessages = append(middleMessages, messages[i])
 			}
 		}
 	}
 	
-	return nil
+	// Calculate tokens for system and recent messages
+	tokensUsed := 0
+	for _, msg := range systemMessages {
+		tokensUsed += msg.Tokens
+	}
+	for _, msg := range recentMessages {
+		tokensUsed += msg.Tokens
+	}
+	
+	// Add middle messages until we hit token limit
+	var keptMiddleMessages []Message
+	for _, msg := range middleMessages {
+		if tokensUsed+msg.Tokens <= targetTokens {
+			keptMiddleMessages = append(keptMiddleMessages, msg)
+			tokensUsed += msg.Tokens
+		}
+	}
+	
+	// Reconstruct conversation
+	cm.conversation.Messages = systemMessages
+	cm.conversation.Messages = append(cm.conversation.Messages, keptMiddleMessages...)
+	cm.conversation.Messages = append(cm.conversation.Messages, recentMessages...)
+	cm.recalculateTokens()
+}
+
+// GetPruningStats returns statistics about pruning
+func (cm *ConversationManager) GetPruningStats() map[string]interface{} {
+	stats := make(map[string]interface{})
+	stats["total_messages"] = len(cm.conversation.Messages)
+	stats["total_tokens"] = cm.conversation.TotalTokens
+	stats["max_history"] = cm.conversation.MaxHistory
+	stats["context_window"] = cm.conversation.ContextWindow
+	
+	systemCount := 0
+	userCount := 0
+	assistantCount := 0
+	
+	for _, msg := range cm.conversation.Messages {
+		switch msg.Role {
+		case "system":
+			systemCount++
+		case "user":
+			userCount++
+		case "assistant":
+			assistantCount++
+		}
+	}
+	
+	stats["system_messages"] = systemCount
+	stats["user_messages"] = userCount
+	stats["assistant_messages"] = assistantCount
+	
+	return stats
 }
 
 // recalculateTokens recalculates total token count
