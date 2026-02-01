@@ -8,6 +8,29 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 - Built in Go for lightweight performance
 - Maintains detailed specification documentation in sync with implementation
 
+## Documentation Organization
+
+**IMPORTANT**: All progress summaries, phase results, roadmaps, profiling reports, and implementation notes should be placed in the `docs/` directory, NOT in the project root. The root should only contain `PLAN.md` and `README.md`.
+
+### Documentation Directory Structure
+```
+docs/
+├── phases/          # Phase summaries (PHASE*.md files)
+├── plans/           # Strategic planning documents and roadmaps
+├── results/         # Test results, profiling data, benchmarks
+├── implementation/  # Implementation notes and technical details
+└── setup/          # Setup guides and user documentation
+```
+
+### File Placement Guidelines
+- **Phase summaries**: `docs/phases/PHASE*_SUMMARY.md`
+- **Strategic plans/roadmaps**: `docs/plans/` (e.g., PERFORMANCE_OPTIMIZATION_PLAN.md, PHASE10.8_ROADMAP.md)
+- **Test results/profiling**: `docs/results/` (e.g., END_TO_END_TEST_RESULTS.md, PROFILING_RESULTS.md)
+- **Implementation details**: `docs/implementation/` (e.g., Q6K_IMPLEMENTATION.md)
+- **Setup guides**: `docs/setup/` (e.g., llama-setup.md, shell-completion.md)
+- **Project plan**: `PLAN.md` (root only)
+- **User-facing docs**: `README.md` (root only)
+
 ## Proposed Approach
 
 ### Technology Stack
@@ -418,7 +441,7 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 - MatMul parallel implementation: 3-5x speedup
 - 1,500 LOC implementation + 1,200 LOC tests
 - Zero external dependencies (pure Go)
-- See [PHASE10.1_SUMMARY.md](./PHASE10.1_SUMMARY.md) for details
+- See [PHASE10.1_SUMMARY.md](./docs/phases/PHASE10.1_SUMMARY.md) for details
 
 #### Phase 10.2: SIMD Optimization (Months 2-4, overlaps 10.1) ✅ COMPLETE
 - [x] AVX2 optimizations for x86 CPUs (compiler auto-vectorization)
@@ -517,7 +540,7 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 - KV-cache for efficient autoregressive generation
 - 36 tests passing across transformer and inference
 - Clean architecture with no circular dependencies
-- See [PHASE10.6_SUMMARY.md](./PHASE10.6_SUMMARY.md) for details
+- See [PHASE10.6_SUMMARY.md](./docs/phases/PHASE10.6_SUMMARY.md) for details
 
 #### Phase 10.7: Integration & Testing (Months 8-9) ✅ COMPLETE
 - [x] Replace go-llama.cpp with custom engine
@@ -538,7 +561,7 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 - Smaller binaries (~15-25 MB vs ~50-80 MB)
 - Full backward compatibility maintained
 - Comprehensive testing documentation (TESTING.md - 285 lines)
-- See [PHASE10.7_SUMMARY.md](./PHASE10.7_SUMMARY.md) for details
+- See [PHASE10.7_SUMMARY.md](./docs/phases/PHASE10.7_SUMMARY.md) for details
 
 #### Phase 10.8: Quantization & Optimization (Months 9+) 🚧 IN PROGRESS
 - [x] Q5_K dequantization implementation
@@ -574,9 +597,9 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 - Memory: <2MB during load (mmap working perfectly)
 - **Fused MatMul Phase 1 complete**: Reference implementation with 56-69% memory reduction
 - Comprehensive performance optimization plan created
-- See [PHASE10.8_SUMMARY.md](./PHASE10.8_SUMMARY.md) for Q5_K/Q6_K details
-- See [PERFORMANCE_OPTIMIZATION_PLAN.md](./PERFORMANCE_OPTIMIZATION_PLAN.md) for optimization roadmap
-- See [PHASE1_RESULTS.md](./PHASE1_RESULTS.md) for fused matmul Phase 1 results
+- See [PHASE10.8_SUMMARY.md](./docs/phases/PHASE10.8_SUMMARY.md) for Q5_K/Q6_K details
+- See [PERFORMANCE_OPTIMIZATION_PLAN.md](./docs/plans/PERFORMANCE_OPTIMIZATION_PLAN.md) for optimization roadmap
+- See [PHASE1_RESULTS.md](./docs/results/PHASE1_RESULTS.md) for fused matmul Phase 1 results
 
 ### Project Structure (New Packages)
 ```
@@ -667,7 +690,7 @@ make build-llama   # Uses go-llama.cpp
 
 ## See Also
 
-- [Phase 9 Detailed Plan](./PHASE9_SUMMARY.md)
+- [Phase 9 Detailed Plan](./docs/phases/PHASE9_SUMMARY.md)
 - [Custom Engine Spec](./specs/custom-inference.md)
 - [Tensor Library Spec](./specs/tensor-system.md)
 - [GGUF Format Spec](./specs/gguf-format.md)
