@@ -287,7 +287,7 @@ func (t *Tensor) NumDims() int {
 // At returns the value at the given multi-dimensional index
 func (t *Tensor) At(indices ...int) float32 {
 	if len(indices) != len(t.shape) {
-		panic(fmt.Sprintf("expected %d indices, got %d", len(t.shape), len(indices)))
+		panic(fmt.Sprintf("At() expected %d indices (shape=%v), got %d indices=%v", len(t.shape), t.shape, len(indices), indices))
 	}
 
 	// Compute linear index
@@ -305,6 +305,8 @@ func (t *Tensor) At(indices ...int) float32 {
 		return t.data.([]float32)[idx]
 	case Float16:
 		return float16ToFloat32(t.data.([]uint16)[idx])
+	case Q5_K:
+		return DequantizeQ5_KElement(t.data.([]byte), idx)
 	default:
 		panic(fmt.Sprintf("At() not supported for dtype %s", t.dtype))
 	}

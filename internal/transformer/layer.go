@@ -36,15 +36,15 @@ func NewTransformerLayer(ggufFile *gguf.GGUFFile, cfg *Config, layerIdx int) (*T
 		return nil, fmt.Errorf("failed to create FFN: %w", err)
 	}
 
-	// Load normalization weights
+	// Load normalization weights (use eager dequantization for small tensors)
 	prefix := fmt.Sprintf("blk.%d", layerIdx)
 
-	attnNormWeight, err := loadTensor(ggufFile, prefix+".attn_norm.weight")
+	attnNormWeight, err := loadTensorEager(ggufFile, prefix+".attn_norm.weight")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load attn norm weight: %w", err)
 	}
 
-	ffnNormWeight, err := loadTensor(ggufFile, prefix+".ffn_norm.weight")
+	ffnNormWeight, err := loadTensorEager(ggufFile, prefix+".ffn_norm.weight")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load ffn norm weight: %w", err)
 	}

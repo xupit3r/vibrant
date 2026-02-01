@@ -50,11 +50,11 @@ func NewModel(ggufFile *gguf.GGUFFile) (*Model, error) {
 		layers[i] = layer
 	}
 
-	// Load output normalization
-	outputNormWeight, err := loadTensor(ggufFile, "output_norm.weight")
+	// Load output normalization (use eager dequantization for small tensors)
+	outputNormWeight, err := loadTensorEager(ggufFile, "output_norm.weight")
 	if err != nil {
 		// Try alternative name
-		outputNormWeight, err = loadTensor(ggufFile, "norm.weight")
+		outputNormWeight, err = loadTensorEager(ggufFile, "norm.weight")
 		if err != nil {
 			return nil, fmt.Errorf("failed to load output norm weight: %w", err)
 		}
@@ -65,7 +65,7 @@ func NewModel(ggufFile *gguf.GGUFFile) (*Model, error) {
 		return nil, fmt.Errorf("failed to create output norm: %w", err)
 	}
 
-	// Load output projection (LM head)
+	// Load output projection (LM head) - keep lazy for large matrix
 	outputWeight, err := loadTensor(ggufFile, "output.weight")
 	if err != nil {
 		// Some models tie weights with embeddings

@@ -8,6 +8,10 @@ import (
 
 // MatMul performs matrix multiplication: C = A @ B
 // A: [M x K], B: [K x N] -> C: [M x N]
+//
+// Supports lazy dequantization for Q5_K weight tensors:
+//   - If B is Q5_K, it will be dequantized on-the-fly during multiplication
+//   - This avoids pre-loading entire weight matrices into memory
 func MatMul(a, b *Tensor) *Tensor {
 	// Validate dimensions
 	if len(a.shape) != 2 || len(b.shape) != 2 {
@@ -19,6 +23,25 @@ func MatMul(a, b *Tensor) *Tensor {
 
 	if K != K2 {
 		panic(fmt.Sprintf("MatMul dimension mismatch: [%d x %d] @ [%d x %d]", M, K, K2, N))
+	}
+
+	// Handle quantized tensors with lazy dequantization
+	// If B is Q5_K (common case for weights), dequantize it
+	if b.dtype == Q5_K {
+		bDequantized, err := DequantizeQ5_KTensor(b)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))
+		}
+		b = bDequantized
+	}
+
+	// If A is quantized, dequantize it (less common)
+	if a.dtype == Q5_K {
+		aDequantized, err := DequantizeQ5_KTensor(a)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))
+		}
+		a = aDequantized
 	}
 
 	// Dispatch to best implementation based on size and SIMD availability

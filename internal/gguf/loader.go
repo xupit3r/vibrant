@@ -26,6 +26,39 @@ func (g *GGUFFile) LoadTensor(name string) (*tensor.Tensor, error) {
 		shape[i] = int(dim)
 	}
 
+	// Calculate expected size based on shape and dtype
+	expectedElements := 1
+	for _, dim := range shape {
+		expectedElements *= dim
+	}
+	var expectedSize int64
+	switch dtype {
+	case tensor.Float32:
+		expectedSize = int64(expectedElements * 4)
+	case tensor.Q5_K:
+		// Q5_K uses 176 bytes per 256 elements
+		numBlocks := (expectedElements + 255) / 256
+		expectedSize = int64(numBlocks * 176)
+	default:
+		expectedSize = int64(expectedElements * dtype.BytesPerElement())
+	}
+
+	// Fix shape mismatch for Float32 tensors (common issue in some GGUF files)
+	if int64(info.Size) != expectedSize && dtype == tensor.Float32 {
+		actualElements := int(info.Size) / 4 // float32 is 4 bytes
+		if len(shape) == 2 && actualElements%shape[0] == 0 {
+			// Fix the second dimension based on actual data size
+			correctedShape := []int{shape[0], actualElements / shape[0]}
+			fmt.Printf("Info: Correcting shape for %s from %v to %v (actual size=%d bytes)\n",
+				name, shape, correctedShape, info.Size)
+			shape = correctedShape
+			expectedSize = int64(info.Size)
+		} else {
+			fmt.Printf("WARNING: Tensor %s size mismatch - metadata says %d bytes, expected %d bytes for shape %v dtype %s\n",
+				name, info.Size, expectedSize, shape, dtype)
+		}
+	}
+
 	// Memory-map the tensor data
 	t, err := tensor.NewTensorMmap(g.path, absoluteOffset, int64(info.Size), shape, dtype)
 	if err != nil {

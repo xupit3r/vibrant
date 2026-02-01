@@ -162,12 +162,35 @@ func (a *Attention) Forward(x *tensor.Tensor, positions []int, useCache bool) (*
 	return output, nil
 }
 
-// Helper: load tensor with error handling
+// Helper: load tensor with lazy dequantization
+// This keeps large weight matrices (attention, FFN) in Q5_K format
+// and will be dequantized on-demand during MatMul operations
 func loadTensor(ggufFile *gguf.GGUFFile, name string) (*tensor.Tensor, error) {
 	t, err := ggufFile.LoadTensor(name)
 	if err != nil {
 		return nil, err
 	}
+	return t, nil
+}
+
+// Helper: load tensor with eager dequantization
+// Use this for small, frequently accessed tensors (norms, biases)
+// that need to be in Float32 format
+func loadTensorEager(ggufFile *gguf.GGUFFile, name string) (*tensor.Tensor, error) {
+	t, err := ggufFile.LoadTensor(name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Eagerly dequantize Q5_K tensors to Float32
+	if t.DType() == tensor.Q5_K {
+		dequantized, err := tensor.DequantizeQ5_KTensor(t)
+		if err != nil {
+			return nil, fmt.Errorf("failed to dequantize %s: %w", name, err)
+		}
+		return dequantized, nil
+	}
+
 	return t, nil
 }
 
