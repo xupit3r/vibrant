@@ -128,6 +128,7 @@ func Split(a *Tensor, numChunks int, dim int) []*Tensor
 ```go
 // MatMul performs matrix multiplication: C = A @ B
 // A: [M x K], B: [K x N] -> C: [M x N]
+// Automatically dispatches to fused implementations for quantized tensors
 func MatMul(a, b *Tensor) *Tensor
 
 // BatchMatMul for batched matrix multiplication
@@ -138,6 +139,36 @@ func BatchMatMul(a, b *Tensor) *Tensor
 // A: [M x K], b: [K] -> c: [M]
 func MatVec(a, b *Tensor) *Tensor
 ```
+
+### Fused Quantized Matrix Operations (Phase 10.8+)
+
+**Motivation**: Dequantizing entire weight tensors before MatMul allocates 27.9GB for a 32-layer model. Fused operations eliminate intermediate allocations.
+
+```go
+// MatMulQ5K performs fused dequantization + matrix multiplication for Q5_K tensors
+// Eliminates the need to create a full intermediate Float32 tensor
+//
+// Memory savings: 56-69% reduction in allocations
+// Quality: Identical to DequantizeQ5_KTensor() + MatMul() (<1e-4 error)
+func MatMulQ5K(a *Tensor, bQuantized *Tensor) (*Tensor, error)
+
+// MatMulQ6K performs fused dequantization + matrix multiplication for Q6_K tensors
+func MatMulQ6K(a *Tensor, bQuantized *Tensor) (*Tensor, error)
+```
+
+**Implementation Status**:
+- ✅ Phase 1 (Reference): Correctness-focused naive implementation
+- ⏳ Phase 2 (Optimized): Block-wise + SIMD + parallel (target: 2-3x faster)
+
+**Performance Characteristics**:
+
+| Approach | Memory | Speed (256×256) | Quality |
+|----------|--------|-----------------|---------|
+| Current | 838KB | 2.4ms | Baseline |
+| Fused (Phase 1) | 262KB (-69%) | 492ms | Identical |
+| Fused (Phase 2 target) | <300KB | <1ms (3x faster) | Identical |
+
+See [FUSED_DEQUANT_MATMUL_PLAN.md](../FUSED_DEQUANT_MATMUL_PLAN.md) and [PHASE1_RESULTS.md](../PHASE1_RESULTS.md) for details.
 
 ### Activation Functions
 

@@ -542,14 +542,26 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 
 #### Phase 10.8: Quantization & Optimization (Months 9+) 🚧 IN PROGRESS
 - [x] Q5_K dequantization implementation
+- [x] Q6_K dequantization implementation
 - [x] Lazy loading strategy (99.4ms model load!)
 - [x] MatMul integration with auto-dequantization
-- [x] Comprehensive test suite (18 tests, 100% passing)
+- [x] Comprehensive test suite (18 Q5_K + 18 Q6_K tests passing)
 - [x] Performance profiling baseline
-- [ ] Q4_K, Q6_K, Q8_0 dequantization
-- [ ] SIMD dequantization optimization
-- [ ] Quantized MatMul (fused operations)
+- [x] **Fused Dequant+MatMul Phase 1** (reference implementation)
+  - [x] MatMulQ5K and MatMulQ6K reference implementation
+  - [x] 13 unit tests validating correctness (all passing)
+  - [x] Numerical accuracy validated (<1e-4 error)
+  - [x] Memory savings confirmed (56-69% reduction)
+  - [x] Baseline benchmarks established
+- [ ] **Fused Dequant+MatMul Phase 2** (optimization)
+  - [ ] Block-wise processing
+  - [ ] Direct memory access optimization
+  - [ ] SIMD vectorization (AVX2/NEON)
+  - [ ] Parallelization
+- [ ] Q4_K, Q8_0 dequantization
 - [ ] Memory pooling and optimization
+- [ ] Remove redundant head transpose operations
+- [ ] Ring buffer KV-cache
 - [ ] Flash Attention implementation
 - [ ] Speculative decoding
 - [ ] Quantized KV-cache
@@ -557,12 +569,14 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 **Deliverable**: Quantized inference + continuous optimization ⏳
 
 **Achievement Highlights**:
-- 18 Q5_K tests passing, 100% coverage
+- 18 Q5_K + 18 Q6_K tests passing, 100% coverage
 - Model loading: 99.4ms (30-40x faster than eager dequant)
 - Memory: <2MB during load (mmap working perfectly)
-- 980 LOC implementation + tests
-- Lazy loading strategy dramatically improves performance
-- See [PHASE10.8_SUMMARY.md](./PHASE10.8_SUMMARY.md) for details
+- **Fused MatMul Phase 1 complete**: Reference implementation with 56-69% memory reduction
+- Comprehensive performance optimization plan created
+- See [PHASE10.8_SUMMARY.md](./PHASE10.8_SUMMARY.md) for Q5_K/Q6_K details
+- See [PERFORMANCE_OPTIMIZATION_PLAN.md](./PERFORMANCE_OPTIMIZATION_PLAN.md) for optimization roadmap
+- See [PHASE1_RESULTS.md](./PHASE1_RESULTS.md) for fused matmul Phase 1 results
 
 ### Project Structure (New Packages)
 ```
