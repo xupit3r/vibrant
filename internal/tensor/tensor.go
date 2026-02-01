@@ -16,6 +16,7 @@ const (
 	Float16                 // 16-bit floating point
 	Q4_K                    // 4-bit k-quant
 	Q5_K                    // 5-bit k-quant
+	Q6_K                    // 6-bit k-quant
 	Q8_0                    // 8-bit quantization
 )
 
@@ -30,6 +31,8 @@ func (dt DataType) String() string {
 		return "q4_k"
 	case Q5_K:
 		return "q5_k"
+	case Q6_K:
+		return "q6_k"
 	case Q8_0:
 		return "q8_0"
 	default:
@@ -46,7 +49,7 @@ func (dt DataType) BytesPerElement() int {
 		return 2
 	case Q8_0:
 		return 1 // Approximate (actual is quantized blocks)
-	case Q4_K, Q5_K:
+	case Q4_K, Q5_K, Q6_K:
 		return 1 // Approximate (actual is quantized blocks)
 	default:
 		return 4
@@ -102,7 +105,7 @@ func NewTensor(shape []int, dtype DataType) *Tensor {
 		data = make([]float32, size)
 	case Float16:
 		data = make([]uint16, size) // float16 stored as uint16
-	case Q8_0, Q4_K, Q5_K:
+	case Q8_0, Q4_K, Q5_K, Q6_K:
 		// For quantized types, allocate enough bytes
 		// Actual allocation depends on block structure
 		data = make([]uint8, size)
@@ -188,7 +191,7 @@ func NewTensorMmap(path string, offset int64, size int64, shape []int, dtype Dat
 		data = (*[1 << 30]float32)(unsafe.Pointer(&actualData[0]))[:len(actualData)/4:len(actualData)/4]
 	case Float16:
 		data = (*[1 << 30]uint16)(unsafe.Pointer(&actualData[0]))[:len(actualData)/2:len(actualData)/2]
-	case Q4_K, Q5_K, Q8_0:
+	case Q4_K, Q5_K, Q6_K, Q8_0:
 		data = actualData
 	default:
 		data = (*[1 << 30]float32)(unsafe.Pointer(&actualData[0]))[:len(actualData)/4:len(actualData)/4]
@@ -307,6 +310,8 @@ func (t *Tensor) At(indices ...int) float32 {
 		return float16ToFloat32(t.data.([]uint16)[idx])
 	case Q5_K:
 		return DequantizeQ5_KElement(t.data.([]byte), idx)
+	case Q6_K:
+		return DequantizeQ6_KElement(t.data.([]byte), idx)
 	default:
 		panic(fmt.Sprintf("At() not supported for dtype %s", t.dtype))
 	}

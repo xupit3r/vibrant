@@ -124,6 +124,8 @@ func ggmlTypeToTensorType(gtype GGMLType) tensor.DataType {
 		return tensor.Q4_K
 	case GGML_TYPE_Q5_K:
 		return tensor.Q5_K
+	case GGML_TYPE_Q6_K:
+		return tensor.Q6_K
 	case GGML_TYPE_Q8_0:
 		return tensor.Q8_0
 	default:

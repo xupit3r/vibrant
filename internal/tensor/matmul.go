@@ -35,11 +35,29 @@ func MatMul(a, b *Tensor) *Tensor {
 		b = bDequantized
 	}
 
+	// If B is Q6_K (common case for weights), dequantize it
+	if b.dtype == Q6_K {
+		bDequantized, err := DequantizeQ6_KTensor(b)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q6_K tensor: %v", err))
+		}
+		b = bDequantized
+	}
+
 	// If A is quantized, dequantize it (less common)
 	if a.dtype == Q5_K {
 		aDequantized, err := DequantizeQ5_KTensor(a)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))
+		}
+		a = aDequantized
+	}
+
+	// If A is Q6_K, dequantize it (less common)
+	if a.dtype == Q6_K {
+		aDequantized, err := DequantizeQ6_KTensor(a)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q6_K tensor: %v", err))
 		}
 		a = aDequantized
 	}

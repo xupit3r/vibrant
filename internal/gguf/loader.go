@@ -39,6 +39,10 @@ func (g *GGUFFile) LoadTensor(name string) (*tensor.Tensor, error) {
 		// Q5_K uses 176 bytes per 256 elements
 		numBlocks := (expectedElements + 255) / 256
 		expectedSize = int64(numBlocks * 176)
+	case tensor.Q6_K:
+		// Q6_K uses 210 bytes per 256 elements
+		numBlocks := (expectedElements + 255) / 256
+		expectedSize = int64(numBlocks * 210)
 	default:
 		expectedSize = int64(expectedElements * dtype.BytesPerElement())
 	}
