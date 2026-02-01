@@ -25,9 +25,78 @@ func MatMul(a, b *Tensor) *Tensor {
 		panic(fmt.Sprintf("MatMul dimension mismatch: [%d x %d] @ [%d x %d]", M, K, K2, N))
 	}
 
-	// Handle quantized tensors with lazy dequantization
-	// If B is Q5_K (common case for weights), dequantize it
+	// Handle quantized tensors
+	// Current approach: Dequantize then MatMul (fastest - ~500µs for 128×128)
+	// Fused approaches are slower despite memory savings:
+	//   - Phase 2 Optimized: 11ms (23x slower)
+	//   - Phase 3 Blocked: 11-93ms (worse)
+	// TODO: Investigate SIMD/assembly optimizations for fused approach
+	
+	// If B is Q4_K (common case for weights), dequantize then matmul
+	if b.dtype == Q4_K {
+		bDequantized, err := DequantizeQ4_KTensor(b)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q4_K tensor: %v", err))
+		}
+		b = bDequantized
+	}
+
+	// If B is Q5_K (common case for weights), dequantize then matmul
 	if b.dtype == Q5_K {
+		bDequantized, err := DequantizeQ5_KTensor(b)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))
+		}
+		b = bDequantized
+	}
+
+	// If B is Q6_K (common case for weights), dequantize then matmul
+	if b.dtype == Q6_K {
+		bDequantized, err := DequantizeQ6_KTensor(b)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q6_K tensor: %v", err))
+		}
+		b = bDequantized
+	}
+
+	// If A is quantized, dequantize it (less common)
+	if a.dtype == Q4_K {
+		aDequantized, err := DequantizeQ4_KTensor(a)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q4_K tensor: %v", err))
+		}
+		a = aDequantized
+	}
+
+	// If A is Q5_K, dequantize it (less common)
+	if a.dtype == Q5_K {
+		bDequantized, err := DequantizeQ5_KTensor(b)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))
+		}
+		b = bDequantized
+	}
+
+	// If B is Q6_K (common case for weights), dequantize it
+	if b.dtype == Q6_K {
+		bDequantized, err := DequantizeQ6_KTensor(b)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q6_K tensor: %v", err))
+		}
+		b = bDequantized
+	}
+
+	// If A is quantized, dequantize it (less common)
+	if a.dtype == Q4_K {
+		aDequantized, err := DequantizeQ4_KTensor(a)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q4_K tensor: %v", err))
+		}
+		a = aDequantized
+	}
+
+	// If A is Q5_K, dequantize it (less common)
+	if a.dtype == Q5_K {
 		bDequantized, err := DequantizeQ5_KTensor(b)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))

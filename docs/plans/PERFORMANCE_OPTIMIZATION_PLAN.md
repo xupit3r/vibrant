@@ -1,50 +1,49 @@
 # Vibrant Inference Performance Optimization Plan
 
-**Date**: February 1, 2026
-**Status**: Analysis Complete - Ready for Implementation
-**Priority**: CRITICAL - Blocking production-ready inference
+**Date**: February 1, 2026  
+**Status**: Phase 3 Complete - Profiling Identified Critical Bottleneck  
+**Priority**: CRITICAL - Matrix transpose consuming 71% of inference time
 
 ---
 
 ## 🎯 Executive Summary
 
-Based on comprehensive profiling and code analysis, we've identified **7 critical bottlenecks** causing:
-- **8.6GB unnecessary allocations** per 32-layer inference pass
-- **10-20% time wasted** on redundant operations
-- **O(seq²) memory copying** during generation
-- **640+ heap allocations** per forward pass causing GC pressure
+**Deep profiling reveals the #1 bottleneck**: Matrix transpose loop consumes **71% of inference time**.
 
-**Estimated cumulative speedup**: 5-10x with quality preservation
+**Key Finding**: Weight matrices are transposed 168-224 times per forward pass, yet they're static and should be transposed **once** during model loading.
+
+**Quick Win**: Pre-transpose weights at load time → **4x speedup** with minimal code changes.
 
 ---
 
-## 📊 Profiling Results Summary
+## 📊 Actual Profiling Results (CPU Profile)
 
 ### Current Performance Baseline
 
-**Tensor Operations** (from benchmarks):
-- MatMul 256x256: 2.4ms (parallel), 12ms (naive) → **5x speedup achieved**
-- Q5_K Dequantization: **303 MB/s** throughput
-- Q6_K Dequantization: **314 MB/s** throughput
-- Element access: 26ns per operation
+**Single Forward Pass** (3 tokens):
+- Total time: **99.13 seconds**
+- Performance: **0.03 tokens/sec**
+- Target: 5-10 tokens/sec (need **200-300x speedup**)
 
-**Memory Allocations**:
-- Per forward pass (32 layers): **~8.4 MB**
-- Total allocations per pass: **640+ tensors**
-- Dequantization overhead: **8.6 GB** (entire model converted to Float32)
+### Real Bottlenecks (from CPU profiler)
 
-### Identified Bottlenecks (by impact)
+| Component | Time | % | Fix |
+|-----------|------|---|-----|
+| **Matrix transpose** | **74.87s** | **71%** | ✅ Pre-transpose at load |
+| Q4_K dequantization | 11.99s | 11% | ✅ Cache dequantized weights |
+| Dot products | 10.61s | 10% | ✓ Already decent |
+| Memory allocations | 5.63s | 6% | ✅ Preallocate buffers |
+| Q6_K dequantization | 5.09s | 5% | ✅ Cache dequantized weights |
 
-| # | Bottleneck | Location | Impact | Estimated Speedup |
-|---|------------|----------|--------|-------------------|
-| 1 | Dequant + MatMul unfused | `matmul.go:28-45` | 8.6GB allocs | **3-5x** |
-| 2 | Head transpose copies | `attention.go:198-239` | 10-20% time | **1.15x** |
-| 3 | KV-cache concatenation | `attention.go:417-453` | O(seq²) | **5-10x decode** |
-| 4 | Softmax 3-loop | `attention.go:375-410` | Cache misses | **3x** |
-| 5 | Tensor accessor overhead | `tensor.go` | 500K+ checks | **1.5x** |
-| 6 | 640+ allocations/pass | Multiple | GC pressure | **1.3x** |
-
-**Cumulative speedup potential**: **5-10x** end-to-end
+**Critical Discovery**: The naive transpose loop at `matmul_simd.go:116-117`:
+```go
+// 74.87s wasted here!
+for k := 0; k < K; k++ {
+    for j := 0; j < N; j++ {
+        bTransposed[j*K+k] = bData[k*N+j]
+    }
+}
+```
 
 ---
 

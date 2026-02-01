@@ -2,7 +2,10 @@ package inference
 
 import (
 	"context"
+	"os"
 	"testing"
+
+	"github.com/xupit3r/vibrant/internal/tensor"
 )
 
 // BenchmarkSamplerGreedy benchmarks greedy sampling
@@ -175,9 +178,20 @@ func BenchmarkTokenCount(b *testing.B) {
 	}
 }
 
+// createMockLogits creates a mock logits tensor for testing
+func createMockLogits(vocabSize int) *tensor.Tensor {
+	logits := make([]float32, vocabSize)
+	for i := range logits {
+		logits[i] = float32(i % 100) / 100.0
+	}
+	return tensor.NewTensorFromData(logits, []int{vocabSize})
+}
+
 // getTestModelPath returns path to test model from environment
 func getTestModelPath() string {
-	// Check environment variable
-	// For now, return empty to skip benchmarks that need models
+	// Check environment variable first
+	if envPath := os.Getenv("VIBRANT_TEST_MODEL"); envPath != "" {
+		return envPath
+	}
 	return ""
 }

@@ -308,6 +308,8 @@ func (t *Tensor) At(indices ...int) float32 {
 		return t.data.([]float32)[idx]
 	case Float16:
 		return float16ToFloat32(t.data.([]uint16)[idx])
+	case Q4_K:
+		return DequantizeQ4_KElement(t.data.([]byte), idx)
 	case Q5_K:
 		return DequantizeQ5_KElement(t.data.([]byte), idx)
 	case Q6_K:

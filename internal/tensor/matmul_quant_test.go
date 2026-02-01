@@ -484,3 +484,468 @@ func compareFloatTensors(a, b *Tensor) (maxDiff, avgDiff float64) {
 	avgDiff = totalDiff / float64(len(aData))
 	return maxDiff, avgDiff
 }
+
+// ============================================================================
+// Phase 2: Optimized Implementation Tests
+// ============================================================================
+
+// TestMatMulQ5KOptimized_Correctness validates optimized version matches reference
+func TestMatMulQ5KOptimized_Correctness(t *testing.T) {
+size := 64
+
+// Create input tensors
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = float32(i%100) / 10.0
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = float32(i%50) / 5.0
+}
+
+// Quantize B
+bQuant, err := QuantizeQ5_KTensor(bFloat)
+if err != nil {
+t.Fatalf("Failed to quantize: %v", err)
+}
+
+// Reference: Naive fused implementation
+expected, err := MatMulQ5K(a, bQuant)
+if err != nil {
+t.Fatalf("Reference implementation failed: %v", err)
+}
+
+// Test: Optimized fused implementation
+result, err := MatMulQ5KOptimized(a, bQuant)
+if err != nil {
+t.Fatalf("Optimized implementation failed: %v", err)
+}
+
+// Compare results
+maxDiff, avgDiff := compareFloatTensors(expected, result)
+t.Logf("Optimized vs Reference: Max diff = %.2e, Avg diff = %.2e", maxDiff, avgDiff)
+
+if maxDiff > 1e-4 {
+t.Errorf("Max difference %.2e exceeds threshold 1e-4", maxDiff)
+}
+}
+
+// TestMatMulQ6KOptimized_Correctness validates optimized Q6_K version
+func TestMatMulQ6KOptimized_Correctness(t *testing.T) {
+size := 64
+
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = float32(i%100) / 10.0
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = float32(i%50) / 5.0
+}
+
+bQuant, err := QuantizeQ6_KTensor(bFloat)
+if err != nil {
+t.Fatalf("Failed to quantize: %v", err)
+}
+
+expected, err := MatMulQ6K(a, bQuant)
+if err != nil {
+t.Fatalf("Reference failed: %v", err)
+}
+
+result, err := MatMulQ6KOptimized(a, bQuant)
+if err != nil {
+t.Fatalf("Optimized failed: %v", err)
+}
+
+maxDiff, avgDiff := compareFloatTensors(expected, result)
+t.Logf("Optimized vs Reference: Max diff = %.2e, Avg diff = %.2e", maxDiff, avgDiff)
+
+if maxDiff > 1e-4 {
+t.Errorf("Max difference %.2e exceeds threshold 1e-4", maxDiff)
+}
+}
+
+// TestMatMulQ4KOptimized_Correctness validates optimized Q4_K version
+func TestMatMulQ4KOptimized_Correctness(t *testing.T) {
+size := 64
+
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = float32(i%100) / 10.0
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = float32(i%50) / 5.0
+}
+
+bQuant, err := QuantizeQ4_KTensor(bFloat)
+if err != nil {
+t.Fatalf("Failed to quantize: %v", err)
+}
+
+// Reference: naive approach (dequant + matmul)
+bDequant, err := DequantizeQ4_KTensor(bQuant)
+if err != nil {
+t.Fatalf("Failed to dequantize: %v", err)
+}
+expected := MatMul(a, bDequant)
+
+// Test: optimized fused
+result, err := MatMulQ4KOptimized(a, bQuant)
+if err != nil {
+t.Fatalf("Optimized failed: %v", err)
+}
+
+maxDiff, avgDiff := compareFloatTensors(expected, result)
+t.Logf("Optimized vs Reference: Max diff = %.2e, Avg diff = %.2e", maxDiff, avgDiff)
+
+if maxDiff > 1e-4 {
+t.Errorf("Max difference %.2e exceeds threshold 1e-4", maxDiff)
+}
+}
+
+// ============================================================================
+// Phase 2: Performance Benchmarks
+// ============================================================================
+
+// BenchmarkMatMulQ5K_Optimized benchmarks the optimized Q5_K implementation
+func BenchmarkMatMulQ5K_Optimized(b *testing.B) {
+sizes := []int{64, 128, 256}
+
+for _, size := range sizes {
+b.Run(fmt.Sprintf("size=%d", size), func(b *testing.B) {
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = 1.0
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = 1.0
+}
+
+bQuant, _ := QuantizeQ5_KTensor(bFloat)
+
+b.ResetTimer()
+b.ReportAllocs()
+
+for i := 0; i < b.N; i++ {
+_, _ = MatMulQ5KOptimized(a, bQuant)
+}
+})
+}
+}
+
+// BenchmarkMatMulQ5K_Comparison compares all three approaches
+func BenchmarkMatMulQ5K_Comparison(b *testing.B) {
+size := 128
+
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = 1.0
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = 1.0
+}
+
+bQuant, _ := QuantizeQ5_KTensor(bFloat)
+
+b.Run("Current_DequantThenMatMul", func(b *testing.B) {
+b.ReportAllocs()
+for i := 0; i < b.N; i++ {
+bDequant, _ := DequantizeQ5_KTensor(bQuant)
+_ = MatMul(a, bDequant)
+}
+})
+
+b.Run("Naive_Fused", func(b *testing.B) {
+b.ReportAllocs()
+for i := 0; i < b.N; i++ {
+_, _ = MatMulQ5K(a, bQuant)
+}
+})
+
+b.Run("Optimized_Fused", func(b *testing.B) {
+b.ReportAllocs()
+for i := 0; i < b.N; i++ {
+_, _ = MatMulQ5KOptimized(a, bQuant)
+}
+})
+}
+
+// Test Phase 3: Block-cached implementations
+
+func TestMatMulQ5KBlocked_Correctness(t *testing.T) {
+sizes := []int{2, 64, 128}
+
+for _, size := range sizes {
+t.Run(fmt.Sprintf("size=%d", size), func(t *testing.T) {
+// Create test matrices
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = float32(i%10) + 0.5
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = float32(i%7) + 0.3
+}
+
+// Quantize B
+bQuant, err := QuantizeQ5_KTensor(bFloat)
+if err != nil {
+t.Fatalf("Failed to quantize: %v", err)
+}
+
+// Compute reference result using naive implementation
+refResult, err := MatMulQ5K(a, bQuant)
+if err != nil {
+t.Fatalf("Failed naive matmul: %v", err)
+}
+
+// Compute blocked result
+blockedResult, err := MatMulQ5KBlocked(a, bQuant)
+if err != nil {
+t.Fatalf("Failed blocked matmul: %v", err)
+}
+
+// Compare results
+refData := refResult.data.([]float32)
+blockedData := blockedResult.data.([]float32)
+
+maxDiff := float32(0.0)
+for i := range refData {
+diff := float32(math.Abs(float64(refData[i] - blockedData[i])))
+if diff > maxDiff {
+maxDiff = diff
+}
+}
+
+// Should be bit-exact since we use same dequantization
+if maxDiff > 1e-5 {
+t.Errorf("Size %d: Max difference %.2e exceeds tolerance", size, maxDiff)
+}
+})
+}
+}
+
+func TestMatMulQ6KBlocked_Correctness(t *testing.T) {
+size := 64
+
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = float32(i%10) + 0.5
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = float32(i%7) + 0.3
+}
+
+bQuant, err := QuantizeQ6_KTensor(bFloat)
+if err != nil {
+t.Fatalf("Failed to quantize: %v", err)
+}
+
+refResult, err := MatMulQ6K(a, bQuant)
+if err != nil {
+t.Fatalf("Failed naive matmul: %v", err)
+}
+
+blockedResult, err := MatMulQ6KBlocked(a, bQuant)
+if err != nil {
+t.Fatalf("Failed blocked matmul: %v", err)
+}
+
+refData := refResult.data.([]float32)
+blockedData := blockedResult.data.([]float32)
+
+maxDiff := float32(0.0)
+for i := range refData {
+diff := float32(math.Abs(float64(refData[i] - blockedData[i])))
+if diff > maxDiff {
+maxDiff = diff
+}
+}
+
+if maxDiff > 1e-5 {
+t.Errorf("Max difference %.2e exceeds tolerance", maxDiff)
+}
+}
+
+func TestMatMulQ4KBlocked_Correctness(t *testing.T) {
+size := 64
+
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = float32(i%10) + 0.5
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = float32(i%7) + 0.3
+}
+
+bQuant, err := QuantizeQ4_KTensor(bFloat)
+if err != nil {
+t.Fatalf("Failed to quantize: %v", err)
+}
+
+refResult, err := MatMulQ4KOptimized(a, bQuant)
+if err != nil {
+t.Fatalf("Failed naive matmul: %v", err)
+}
+
+blockedResult, err := MatMulQ4KBlocked(a, bQuant)
+if err != nil {
+t.Fatalf("Failed blocked matmul: %v", err)
+}
+
+refData := refResult.data.([]float32)
+blockedData := blockedResult.data.([]float32)
+
+maxDiff := float32(0.0)
+for i := range refData {
+diff := float32(math.Abs(float64(refData[i] - blockedData[i])))
+if diff > maxDiff {
+maxDiff = diff
+}
+}
+
+if maxDiff > 1e-5 {
+t.Errorf("Max difference %.2e exceeds tolerance", maxDiff)
+}
+}
+
+// BenchmarkMatMulQ5K_Blocked benchmarks block-cached implementation
+func BenchmarkMatMulQ5K_Blocked(b *testing.B) {
+sizes := []int{64, 128, 256}
+
+for _, size := range sizes {
+b.Run(fmt.Sprintf("size=%d", size), func(b *testing.B) {
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = 1.0
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = 1.0
+}
+
+bQuant, _ := QuantizeQ5_KTensor(bFloat)
+
+b.ResetTimer()
+b.ReportAllocs()
+
+for i := 0; i < b.N; i++ {
+_, _ = MatMulQ5KBlocked(a, bQuant)
+}
+})
+}
+}
+
+// Test Phase 3 V2: Improved block-cached implementations
+
+func TestMatMulQ5KBlockedV2_Correctness(t *testing.T) {
+sizes := []int{2, 64, 128}
+
+for _, size := range sizes {
+t.Run(fmt.Sprintf("size=%d", size), func(t *testing.T) {
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = float32(i%10) + 0.5
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = float32(i%7) + 0.3
+}
+
+bQuant, err := QuantizeQ5_KTensor(bFloat)
+if err != nil {
+t.Fatalf("Failed to quantize: %v", err)
+}
+
+refResult, err := MatMulQ5K(a, bQuant)
+if err != nil {
+t.Fatalf("Failed naive matmul: %v", err)
+}
+
+v2Result, err := MatMulQ5KBlockedV2(a, bQuant)
+if err != nil {
+t.Fatalf("Failed V2 matmul: %v", err)
+}
+
+refData := refResult.data.([]float32)
+v2Data := v2Result.data.([]float32)
+
+maxDiff := float32(0.0)
+for i := range refData {
+diff := float32(math.Abs(float64(refData[i] - v2Data[i])))
+if diff > maxDiff {
+maxDiff = diff
+}
+}
+
+if maxDiff > 1e-5 {
+t.Errorf("Size %d: Max difference %.2e exceeds tolerance", size, maxDiff)
+}
+})
+}
+}
+
+func BenchmarkMatMulQ5K_BlockedV2(b *testing.B) {
+sizes := []int{64, 128, 256}
+
+for _, size := range sizes {
+b.Run(fmt.Sprintf("size=%d", size), func(b *testing.B) {
+a := NewTensor([]int{size, size}, Float32)
+aData := a.data.([]float32)
+for i := range aData {
+aData[i] = 1.0
+}
+
+bFloat := NewTensor([]int{size, size}, Float32)
+bFloatData := bFloat.data.([]float32)
+for i := range bFloatData {
+bFloatData[i] = 1.0
+}
+
+bQuant, _ := QuantizeQ5_KTensor(bFloat)
+
+b.ResetTimer()
+b.ReportAllocs()
+
+for i := 0; i < b.N; i++ {
+_, _ = MatMulQ5KBlockedV2(a, bQuant)
+}
+})
+}
+}
