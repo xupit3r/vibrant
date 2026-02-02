@@ -75,6 +75,15 @@ func NewModel(ggufFile *gguf.GGUFFile) (*Model, error) {
 		}
 	}
 
+	// Pre-transpose Float32 output weight for matmul optimization
+	// This is done once at load time instead of repeatedly during generation
+	// For quantized weights, transpose happens during dequantization (handled by cache)
+	if outputWeight.DType() == tensor.Float32 {
+		if err := outputWeight.PretransposeInPlace(); err != nil {
+			return nil, fmt.Errorf("failed to pretranspose output weight: %w", err)
+		}
+	}
+
 	return &Model{
 		config:       cfg,
 		embeddings:   embeddings,

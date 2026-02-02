@@ -374,18 +374,37 @@ func TestAtSetFloat16(t *testing.T) {
 
 // Test At/Set panic on unsupported dtype
 func TestAtSetUnsupportedDtype(t *testing.T) {
-	tensor := NewTensor([]int{2, 2}, Q4_K)
+	// Q4_K is now supported via DequantizeQ4_KElement
+	// This test now verifies that At() works correctly with Q4_K
+	t.Run("At works with Q4_K", func(t *testing.T) {
+		// Create a Q4_K tensor with actual data
+		blockSize := 144 // Q4_K block size in bytes
+		data := make([]byte, blockSize)
+		tensor := &Tensor{
+			shape:  []int{16, 16},
+			dtype:  Q4_K,
+			data:   data,
+			stride: []int{16, 1},
+			device: CPU,
+		}
 
-	t.Run("At panics", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("At should panic on Q4_K dtype")
-			}
-		}()
-		tensor.At(0, 0)
+		// Should not panic - Q4_K is supported
+		val := tensor.At(0, 0)
+		_ = val // Value will be 0.0 for zero-initialized block
 	})
 
-	t.Run("Set panics", func(t *testing.T) {
+	t.Run("Set panics on Q4_K", func(t *testing.T) {
+		// Create a Q4_K tensor
+		blockSize := 144 // Q4_K block size in bytes
+		data := make([]byte, blockSize)
+		tensor := &Tensor{
+			shape:  []int{16, 16},
+			dtype:  Q4_K,
+			data:   data,
+			stride: []int{16, 1},
+			device: CPU,
+		}
+
 		defer func() {
 			if r := recover(); r == nil {
 				t.Error("Set should panic on Q4_K dtype")

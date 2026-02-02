@@ -88,6 +88,13 @@ type Tensor struct {
 	// Memory-mapped file info (if applicable)
 	mmapFile *os.File
 	mmapData []byte
+
+	// Optimization flags
+	transposed bool // True if this is a pre-transposed weight matrix (for matmul optimization)
+
+	// Weight cache (for avoiding redundant dequantization)
+	dequantCache *Tensor // Cached Float32 pre-transposed copy
+	cacheGen     uint64  // LRU generation counter
 }
 
 // NewTensor creates a new tensor with the given shape and data type
@@ -350,6 +357,48 @@ func (t *Tensor) Data() interface{} {
 	return t.data
 }
 
+// Float32Data returns the underlying float32 slice directly.
+// Panics if the tensor's data is not []float32.
+func (t *Tensor) Float32Data() []float32 {
+	return t.data.([]float32)
+}
+
+// GetOrDequantTranspose returns a cached dequantized and pre-transposed copy of this tensor.
+// For quantized weight tensors, this avoids redundant dequantization and transposition.
+// For Float32 tensors, if already pre-transposed, returns the tensor itself unchanged.
+func (t *Tensor) GetOrDequantTranspose() *Tensor {
+	// If already Float32 and pre-transposed, return as-is (no work needed)
+	if t.dtype == Float32 && t.transposed {
+		return t
+	}
+
+	// If Float32 but not transposed, return as-is for backward compatibility
+	// (caller may handle transpose or this is activation data, not weights)
+	if t.dtype == Float32 {
+		return t
+	}
+
+	// Return cached version if available
+	if t.dequantCache != nil {
+		t.cacheGen = nextCacheGen()
+		return t.dequantCache
+	}
+
+	// Dequantize to Float32
+	dequant := dequantIfNeeded(t)
+
+	// Pre-transpose for matmul (B matrix is accessed column-wise)
+	transposed := dequant.Transpose()
+	transposed.MarkTransposed()
+
+	// Register with cache manager (may evict others)
+	DefaultWeightCache.Register(t, transposed)
+	t.dequantCache = transposed
+	t.cacheGen = nextCacheGen()
+
+	return transposed
+}
+
 // Close releases resources (unmaps memory if needed)
 func (t *Tensor) Close() error {
 	if t.mmapFile != nil {
@@ -415,3 +464,92 @@ func float16ToFloat32(h uint16) float32 {
 	bits := (sign << 31) | (exp << 23) | (mantissa << 13)
 	return *(*float32)(unsafe.Pointer(&bits))
 }
+
+// IsTransposed returns true if this tensor is marked as pre-transposed
+func (t *Tensor) IsTransposed() bool {
+return t.transposed
+}
+
+// MarkTransposed marks this tensor as pre-transposed for matmul optimization
+func (t *Tensor) MarkTransposed() {
+t.transposed = true
+}
+
+// Transpose creates a transposed copy of a 2D tensor (optimized for cache locality)
+// For a matrix of shape [M, N], returns shape [N, M] with transposed data
+func (t *Tensor) Transpose() *Tensor {
+if len(t.shape) != 2 {
+panic("Transpose only supports 2D tensors")
+}
+
+M, N := t.shape[0], t.shape[1]
+
+// Create transposed tensor with swapped dimensions
+result := NewTensor([]int{N, M}, t.dtype)
+result.transposed = true // Mark as transposed
+
+switch t.dtype {
+case Float32:
+src := t.data.([]float32)
+dst := result.data.([]float32)
+
+// Cache-blocked transpose for better performance
+// Process 32×32 tiles to fit in L1 cache
+const blockSize = 32
+
+for i := 0; i < M; i += blockSize {
+for j := 0; j < N; j += blockSize {
+// Transpose this block
+iEnd := min(i+blockSize, M)
+jEnd := min(j+blockSize, N)
+
+for ii := i; ii < iEnd; ii++ {
+for jj := j; jj < jEnd; jj++ {
+dst[jj*M+ii] = src[ii*N+jj]
+}
+}
+}
+}
+
+case Q4_K, Q5_K, Q6_K, Q8_0:
+// For quantized tensors, we can't transpose the data directly
+// Instead, mark as transposed and the matmul will handle it
+// This is more complex - for now, panic
+panic("Transpose not yet implemented for quantized tensors")
+
+default:
+panic(fmt.Sprintf("Transpose not implemented for dtype %v", t.dtype))
+}
+
+return result
+}
+
+// PretransposeInPlace transposes this tensor in-place and marks it as pre-transposed.
+// This is an optimization for weight matrices that are used repeatedly in matmul operations.
+// Only works for Float32 2D tensors. Returns error if tensor is not suitable for in-place transpose.
+func (t *Tensor) PretransposeInPlace() error {
+	if len(t.shape) != 2 {
+		return fmt.Errorf("PretransposeInPlace only supports 2D tensors, got %dD", len(t.shape))
+	}
+
+	if t.dtype != Float32 {
+		return fmt.Errorf("PretransposeInPlace only supports Float32 tensors, got %s", t.dtype)
+	}
+
+	if t.transposed {
+		// Already transposed, nothing to do
+		return nil
+	}
+
+	// Create a transposed copy
+	transposed := t.Transpose()
+
+	// Replace this tensor's data with the transposed data
+	t.data = transposed.data
+	t.shape = transposed.shape
+	t.stride = transposed.stride
+	t.transposed = true
+
+	return nil
+}
+

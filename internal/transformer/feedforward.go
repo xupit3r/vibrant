@@ -41,6 +41,25 @@ func NewFeedForward(ggufFile *gguf.GGUFFile, cfg *Config, layerIdx int) (*FeedFo
 		return nil, fmt.Errorf("failed to load down weight: %w", err)
 	}
 
+	// Pre-transpose Float32 weight matrices for matmul optimization
+	// This is done once at load time instead of 168-224 times per forward pass
+	// For quantized weights, transpose happens during dequantization (handled by cache)
+	if gate.DType() == tensor.Float32 {
+		if err := gate.PretransposeInPlace(); err != nil {
+			return nil, fmt.Errorf("failed to pretranspose gate: %w", err)
+		}
+	}
+	if up.DType() == tensor.Float32 {
+		if err := up.PretransposeInPlace(); err != nil {
+			return nil, fmt.Errorf("failed to pretranspose up: %w", err)
+		}
+	}
+	if down.DType() == tensor.Float32 {
+		if err := down.PretransposeInPlace(); err != nil {
+			return nil, fmt.Errorf("failed to pretranspose down: %w", err)
+		}
+	}
+
 	return &FeedForward{
 		gate:            gate,
 		up:              up,
@@ -67,42 +86,22 @@ func (f *FeedForward) Forward(x *tensor.Tensor) (*tensor.Tensor, error) {
 
 	// Gate projection: [batch*seq, intermediate_dim]
 	gateProjFlat := tensor.MatMul(xFlat, f.gate)
-	gateProj := tensor.Reshape(gateProjFlat, []int{batchSize, seqLen, f.intermediateDim})
 
 	// Up projection: [batch*seq, intermediate_dim]
 	upProjFlat := tensor.MatMul(xFlat, f.up)
-	upProj := tensor.Reshape(upProjFlat, []int{batchSize, seqLen, f.intermediateDim})
 
-	// Apply SwiGLU: swish(gate) * up
-	// swish(x) = x * sigmoid(x)
-	swiglu := tensor.NewTensor([]int{batchSize, seqLen, f.intermediateDim}, tensor.Float32)
-
-	for b := 0; b < batchSize; b++ {
-		for s := 0; s < seqLen; s++ {
-			for i := 0; i < f.intermediateDim; i++ {
-				g := float64(gateProj.At(b, s, i))
-				u := float64(upProj.At(b, s, i))
-
-				// Swish activation
-				swish := g * sigmoid(g)
-
-				// SwiGLU: swish * up
-				val := swish * u
-
-				swiglu.Set(float32(val), b, s, i)
-			}
-		}
+	// Apply SwiGLU in-place on gateProjFlat data: swish(gate) * up
+	gData := gateProjFlat.Data().([]float32)
+	uData := upProjFlat.Data().([]float32)
+	for i := range gData {
+		// swish(x) = x * sigmoid(x) = x / (1 + exp(-x))
+		g := gData[i]
+		gData[i] = g / (1.0 + float32(math.Exp(float64(-g)))) * uData[i]
 	}
 
 	// Down projection: [batch*seq, hidden_dim]
-	swigluFlat := tensor.Reshape(swiglu, []int{batchSize * seqLen, f.intermediateDim})
-	outputFlat := tensor.MatMul(swigluFlat, f.down)
+	outputFlat := tensor.MatMul(gateProjFlat, f.down)
 	output := tensor.Reshape(outputFlat, []int{batchSize, seqLen, f.hiddenDim})
 
 	return output, nil
-}
-
-// sigmoid computes sigmoid activation
-func sigmoid(x float64) float64 {
-	return 1.0 / (1.0 + math.Exp(-x))
 }

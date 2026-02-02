@@ -58,6 +58,30 @@ func NewAttention(ggufFile *gguf.GGUFFile, cfg *Config, layerIdx int) (*Attentio
 		return nil, fmt.Errorf("failed to load output weight: %w", err)
 	}
 
+	// Pre-transpose Float32 weight matrices for matmul optimization
+	// This is done once at load time instead of 168-224 times per forward pass
+	// For quantized weights, transpose happens during dequantization (handled by cache)
+	if wq.DType() == tensor.Float32 {
+		if err := wq.PretransposeInPlace(); err != nil {
+			return nil, fmt.Errorf("failed to pretranspose wq: %w", err)
+		}
+	}
+	if wk.DType() == tensor.Float32 {
+		if err := wk.PretransposeInPlace(); err != nil {
+			return nil, fmt.Errorf("failed to pretranspose wk: %w", err)
+		}
+	}
+	if wv.DType() == tensor.Float32 {
+		if err := wv.PretransposeInPlace(); err != nil {
+			return nil, fmt.Errorf("failed to pretranspose wv: %w", err)
+		}
+	}
+	if wo.DType() == tensor.Float32 {
+		if err := wo.PretransposeInPlace(); err != nil {
+			return nil, fmt.Errorf("failed to pretranspose wo: %w", err)
+		}
+	}
+
 	// Create RoPE layer
 	rope := NewRoPE(cfg.HeadDim, cfg.RopeFreqBase, cfg.ContextLength)
 
@@ -200,15 +224,15 @@ func transposeHeads(x *tensor.Tensor) *tensor.Tensor {
 	batch, seq, heads, headDim := shape[0], shape[1], shape[2], shape[3]
 
 	result := tensor.NewTensor([]int{batch, heads, seq, headDim}, x.DType())
+	src := x.Data().([]float32)
+	dst := result.Data().([]float32)
 
-	// Transpose the data
 	for b := 0; b < batch; b++ {
 		for s := 0; s < seq; s++ {
 			for h := 0; h < heads; h++ {
-				for d := 0; d < headDim; d++ {
-					val := x.At(b, s, h, d)
-					result.Set(val, b, h, s, d)
-				}
+				srcOff := b*seq*heads*headDim + s*heads*headDim + h*headDim
+				dstOff := b*heads*seq*headDim + h*seq*headDim + s*headDim
+				copy(dst[dstOff:dstOff+headDim], src[srcOff:srcOff+headDim])
 			}
 		}
 	}
@@ -222,15 +246,15 @@ func transposeHeadsBack(x *tensor.Tensor) *tensor.Tensor {
 	batch, heads, seq, headDim := shape[0], shape[1], shape[2], shape[3]
 
 	result := tensor.NewTensor([]int{batch, seq, heads, headDim}, x.DType())
+	src := x.Data().([]float32)
+	dst := result.Data().([]float32)
 
-	// Transpose the data
 	for b := 0; b < batch; b++ {
 		for h := 0; h < heads; h++ {
 			for s := 0; s < seq; s++ {
-				for d := 0; d < headDim; d++ {
-					val := x.At(b, h, s, d)
-					result.Set(val, b, s, h, d)
-				}
+				srcOff := b*heads*seq*headDim + h*seq*headDim + s*headDim
+				dstOff := b*seq*heads*headDim + s*heads*headDim + h*headDim
+				copy(dst[dstOff:dstOff+headDim], src[srcOff:srcOff+headDim])
 			}
 		}
 	}
@@ -249,18 +273,17 @@ func expandKVHeads(kv *tensor.Tensor, numHeads, numKVHeads int) *tensor.Tensor {
 
 	groupSize := numHeads / numKVHeads
 	result := tensor.NewTensor([]int{batch, numHeads, seq, headDim}, kv.DType())
+	src := kv.Data().([]float32)
+	dst := result.Data().([]float32)
+	seqHeadDim := seq * headDim
 
 	for b := 0; b < batch; b++ {
 		for kvh := 0; kvh < numKVHeads; kvh++ {
-			for s := 0; s < seq; s++ {
-				for d := 0; d < headDim; d++ {
-					val := kv.At(b, kvh, s, d)
-					// Replicate this KV head to multiple query heads
-					for g := 0; g < groupSize; g++ {
-						h := kvh*groupSize + g
-						result.Set(val, b, h, s, d)
-					}
-				}
+			srcOff := b*numKVHeads*seqHeadDim + kvh*seqHeadDim
+			for g := 0; g < groupSize; g++ {
+				h := kvh*groupSize + g
+				dstOff := b*numHeads*seqHeadDim + h*seqHeadDim
+				copy(dst[dstOff:dstOff+seqHeadDim], src[srcOff:srcOff+seqHeadDim])
 			}
 		}
 	}
@@ -320,53 +343,52 @@ func computeAttention(q, k, v *tensor.Tensor, headDim int) (*tensor.Tensor, erro
 // extractSlice extracts a [seq, head_dim] slice from [batch, heads, seq, head_dim]
 func extractSlice(t *tensor.Tensor, batch, head int) *tensor.Tensor {
 	shape := t.Shape()
-	seqLen := shape[2]
+	seq := shape[2]
 	headDim := shape[3]
+	heads := shape[1]
 
-	result := tensor.NewTensor([]int{seqLen, headDim}, t.DType())
-	for s := 0; s < seqLen; s++ {
-		for d := 0; d < headDim; d++ {
-			val := t.At(batch, head, s, d)
-			result.Set(val, s, d)
-		}
-	}
+	result := tensor.NewTensor([]int{seq, headDim}, t.DType())
+	src := t.Data().([]float32)
+	dst := result.Data().([]float32)
+	srcBase := batch*heads*seq*headDim + head*seq*headDim
+	copy(dst, src[srcBase:srcBase+seq*headDim])
 	return result
 }
 
 // copySlice copies a [seq, head_dim] slice back to [batch, heads, seq, head_dim]
 func copySlice(src *tensor.Tensor, dst *tensor.Tensor, batch, head int) {
 	shape := src.Shape()
-	seqLen := shape[0]
+	seq := shape[0]
 	headDim := shape[1]
+	dstShape := dst.Shape()
+	heads := dstShape[1]
 
-	for s := 0; s < seqLen; s++ {
-		for d := 0; d < headDim; d++ {
-			val := src.At(s, d)
-			dst.Set(val, batch, head, s, d)
-		}
-	}
+	srcData := src.Data().([]float32)
+	dstData := dst.Data().([]float32)
+	dstBase := batch*heads*seq*headDim + head*seq*headDim
+	copy(dstData[dstBase:dstBase+seq*headDim], srcData)
 }
 
 // scaleScores scales all elements in the tensor by a factor
 func scaleScores(scores *tensor.Tensor, scale float64) {
-	shape := scores.Shape()
-	for i := 0; i < shape[0]; i++ {
-		for j := 0; j < shape[1]; j++ {
-			val := float64(scores.At(i, j))
-			scores.Set(float32(val*scale), i, j)
-		}
+	data := scores.Data().([]float32)
+	s := float32(scale)
+	for i := range data {
+		data[i] *= s
 	}
 }
 
 // applyCausalMask applies causal masking to prevent attending to future positions
 func applyCausalMask(scores *tensor.Tensor) {
 	shape := scores.Shape()
-	seqLen := shape[0]
+	rows := shape[0]
+	cols := shape[1]
+	data := scores.Data().([]float32)
+	negInf := float32(math.Inf(-1))
 
-	// Set future positions to -inf
-	for i := 0; i < seqLen; i++ {
-		for j := i + 1; j < seqLen; j++ {
-			scores.Set(float32(math.Inf(-1)), i, j)
+	for i := 0; i < rows; i++ {
+		for j := i + 1; j < cols; j++ {
+			data[i*cols+j] = negInf
 		}
 	}
 }
@@ -374,37 +396,37 @@ func applyCausalMask(scores *tensor.Tensor) {
 // applySoftmax applies softmax to each row of the scores matrix
 func applySoftmax(scores *tensor.Tensor) {
 	shape := scores.Shape()
-	seqLen := shape[0]
+	rows := shape[0]
+	cols := shape[1]
+	data := scores.Data().([]float32)
 
-	for i := 0; i < seqLen; i++ {
+	for i := 0; i < rows; i++ {
+		row := data[i*cols : (i+1)*cols]
+
 		// Find max for numerical stability
-		maxVal := float32(math.Inf(-1))
-		for j := 0; j < seqLen; j++ {
-			val := scores.At(i, j)
-			if val > maxVal && !math.IsInf(float64(val), -1) {
-				maxVal = val
+		maxVal := row[0]
+		for _, v := range row {
+			if v > maxVal {
+				maxVal = v
 			}
 		}
 
-		// Compute exp(x - max) and sum
+		// Compute exp and sum
 		sum := float32(0)
-		expVals := make([]float32, seqLen)
-		for j := 0; j < seqLen; j++ {
-			val := scores.At(i, j)
-			if math.IsInf(float64(val), -1) {
-				expVals[j] = 0
+		for j := range row {
+			if row[j] == float32(math.Inf(-1)) {
+				row[j] = 0
 			} else {
-				expVals[j] = float32(math.Exp(float64(val - maxVal)))
+				row[j] = float32(math.Exp(float64(row[j] - maxVal)))
+				sum += row[j]
 			}
-			sum += expVals[j]
 		}
 
 		// Normalize
-		for j := 0; j < seqLen; j++ {
-			if sum > 0 {
-				scores.Set(expVals[j]/sum, i, j)
-			} else {
-				scores.Set(0, i, j)
+		if sum > 0 {
+			invSum := 1.0 / sum
+			for j := range row {
+				row[j] *= invSum
 			}
 		}
 	}
@@ -426,27 +448,21 @@ func concatenateSeqDim(cached, new *tensor.Tensor, cacheLen int) *tensor.Tensor 
 	totalSeqLen := cacheLen + newSeqLen
 	result := tensor.NewTensor([]int{batch, heads, totalSeqLen, headDim}, cached.DType())
 
-	// Copy cached values
-	for b := 0; b < batch; b++ {
-		for h := 0; h < heads; h++ {
-			for s := 0; s < cacheLen; s++ {
-				for d := 0; d < headDim; d++ {
-					val := cached.At(b, h, s, d)
-					result.Set(val, b, h, s, d)
-				}
-			}
-		}
-	}
+	cachedData := cached.Data().([]float32)
+	newData := new.Data().([]float32)
+	dstData := result.Data().([]float32)
 
-	// Copy new values
 	for b := 0; b < batch; b++ {
 		for h := 0; h < heads; h++ {
-			for s := 0; s < newSeqLen; s++ {
-				for d := 0; d < headDim; d++ {
-					val := new.At(b, h, s, d)
-					result.Set(val, b, h, cacheLen+s, d)
-				}
-			}
+			// Copy cached portion
+			cachedOff := b*heads*cachedShape[2]*headDim + h*cachedShape[2]*headDim
+			dstOff := b*heads*totalSeqLen*headDim + h*totalSeqLen*headDim
+			copy(dstData[dstOff:dstOff+cacheLen*headDim], cachedData[cachedOff:cachedOff+cacheLen*headDim])
+
+			// Copy new portion
+			newOff := b*heads*newSeqLen*headDim + h*newSeqLen*headDim
+			dstNewOff := dstOff + cacheLen*headDim
+			copy(dstData[dstNewOff:dstNewOff+newSeqLen*headDim], newData[newOff:newOff+newSeqLen*headDim])
 		}
 	}
 
