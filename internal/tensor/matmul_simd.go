@@ -12,7 +12,11 @@ import (
 // This version uses better memory access patterns and vectorization hints
 func matmulSIMD(a, b *Tensor) *Tensor {
 	M, K := a.shape[0], a.shape[1]
+	// If B is transposed, shape is [N, K], otherwise [K, N]
 	N := b.shape[1]
+	if b.IsTransposed() {
+		N = b.shape[0]
+	}
 
 	result := Zeros([]int{M, N}, a.dtype)
 
@@ -59,7 +63,11 @@ func matmulSIMD(a, b *Tensor) *Tensor {
 // matmulSIMDBlocked combines SIMD with cache-friendly blocking
 func matmulSIMDBlocked(a, b *Tensor) *Tensor {
 	M, K := a.shape[0], a.shape[1]
+	// If B is transposed, shape is [N, K], otherwise [K, N]
 	N := b.shape[1]
+	if b.IsTransposed() {
+		N = b.shape[0]
+	}
 
 	result := Zeros([]int{M, N}, a.dtype)
 
@@ -133,7 +141,11 @@ func matmulSIMDBlocked(a, b *Tensor) *Tensor {
 // Parallelizes over output columns instead of rows.
 func matmulSIMDSingleRow(a, b *Tensor) *Tensor {
 	K := a.shape[1]
+	// If B is transposed, shape is [N, K], otherwise [K, N]
 	N := b.shape[1]
+	if b.IsTransposed() {
+		N = b.shape[0]
+	}
 	result := Zeros([]int{1, N}, Float32)
 
 	aData := a.data.([]float32)
@@ -183,7 +195,11 @@ func matmulSIMDSingleRow(a, b *Tensor) *Tensor {
 // matmulSIMDParallel combines SIMD with parallel execution
 func matmulSIMDParallel(a, b *Tensor) *Tensor {
 	M, K := a.shape[0], a.shape[1]
+	// If B is transposed, shape is [N, K], otherwise [K, N]
 	N := b.shape[1]
+	if b.IsTransposed() {
+		N = b.shape[0]
+	}
 
 	result := Zeros([]int{M, N}, a.dtype)
 
