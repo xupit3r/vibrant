@@ -1,36 +1,52 @@
 package transformer
 
 import (
-"os"
-"testing"
+	"os"
+	"testing"
 
-"github.com/xupit3r/vibrant/internal/gguf"
+	"github.com/xupit3r/vibrant/internal/gguf"
+	"github.com/xupit3r/vibrant/internal/tensor"
 )
 
 func BenchmarkForwardPass(b *testing.B) {
-// Load real model for benchmarking
-modelPath := os.Getenv("HOME") + "/.vibrant/models/qwen2.5-coder-7b-q4.gguf"
+	// Load real model for benchmarking
+	modelPath := os.Getenv("HOME") + "/.vibrant/models/qwen2.5-coder-7b-q4.gguf"
 
-ggufFile, err := gguf.ParseGGUF(modelPath)
-if err != nil {
-b.Skipf("Cannot load model: %v", err)
-}
+	// Set cache budget to 20GB to hold most dequantized+transposed weights
+	// Model needs ~26GB for all weights, but 20GB should be sufficient for most
+	tensor.DefaultWeightCache.SetBudget(20 * 1024 * 1024 * 1024)
 
-model, err := NewModel(ggufFile)
-if err != nil {
-b.Fatalf("Failed to create model: %v", err)
-}
+	ggufFile, err := gguf.ParseGGUF(modelPath)
+	if err != nil {
+		b.Skipf("Cannot load model: %v", err)
+	}
 
-// Simple input: single token
-tokens := [][]int{{1, 100, 200}}  // BOS + 2 tokens
+	model, err := NewModel(ggufFile)
+	if err != nil {
+		b.Fatalf("Failed to create model: %v", err)
+	}
 
-b.ResetTimer()
-b.ReportAllocs()
+	// Simple input: single token
+	tokens := [][]int{{1, 100, 200}} // BOS + 2 tokens
 
-for i := 0; i < b.N; i++ {
-_, err := model.Forward(tokens, true)
-if err != nil {
-b.Fatalf("Forward failed: %v", err)
-}
-}
+	// Warm up cache with one forward pass before benchmarking
+	_, err = model.Forward(tokens, true)
+	if err != nil {
+		b.Fatalf("Warmup forward pass failed: %v", err)
+	}
+
+	// Check cache stats after warmup
+	used, budget, entries := tensor.DefaultWeightCache.Stats()
+	b.Logf("Cache after warmup: %d MB used / %d MB budget, %d entries",
+		used/(1024*1024), budget/(1024*1024), entries)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := model.Forward(tokens, true)
+		if err != nil {
+			b.Fatalf("Forward failed: %v", err)
+		}
+	}
 }
