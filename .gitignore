@@ -37,3 +37,4 @@ build/
 debug-load
 list-tensors
 test-inference
+/vibrant
