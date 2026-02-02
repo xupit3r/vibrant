@@ -49,23 +49,28 @@ func (r *RMSNorm) Forward(x *tensor.Tensor) (*tensor.Tensor, error) {
 	// Create output tensor
 	output := tensor.NewTensor(shape, tensor.Float32)
 
-	// Apply RMSNorm to each position independently
+	xData := x.Data().([]float32)
+	oData := output.Data().([]float32)
+	wData := r.weight.Data().([]float32)
+
 	for b := 0; b < batchSize; b++ {
 		for s := 0; s < seqLen; s++ {
-			// Compute RMS (root mean square)
-			sumSquares := 0.0
-			for d := 0; d < hiddenDim; d++ {
-				val := float64(x.At(b, s, d))
-				sumSquares += val * val
-			}
-			rms := math.Sqrt(sumSquares/float64(hiddenDim) + r.eps)
+			off := (b*seqLen + s) * hiddenDim
+			row := xData[off : off+hiddenDim]
+			out := oData[off : off+hiddenDim]
 
-			// Normalize and scale
+			// Compute sum of squares
+			sumSq := float32(0)
+			for _, v := range row {
+				sumSq += v * v
+			}
+
+			// RMS = sqrt(mean(x^2) + eps), then compute 1/rms
+			rmsInv := float32(1.0 / math.Sqrt(float64(sumSq/float32(hiddenDim))+r.eps))
+
+			// Normalize and scale by weight
 			for d := 0; d < hiddenDim; d++ {
-				val := float64(x.At(b, s, d))
-				weight := float64(r.weight.At(d))
-				normalized := (val / rms) * weight
-				output.Set(float32(normalized), b, s, d)
+				out[d] = row[d] * rmsInv * wData[d]
 			}
 		}
 	}

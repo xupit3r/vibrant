@@ -6,12 +6,39 @@ import (
 	"sync"
 )
 
+// dequantIfNeeded dequantizes a quantized tensor to Float32 if necessary.
+// Returns the tensor unchanged if already Float32.
+func dequantIfNeeded(t *Tensor) *Tensor {
+	switch t.dtype {
+	case Q4_K:
+		d, err := DequantizeQ4_KTensor(t)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q4_K tensor: %v", err))
+		}
+		return d
+	case Q5_K:
+		d, err := DequantizeQ5_KTensor(t)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))
+		}
+		return d
+	case Q6_K:
+		d, err := DequantizeQ6_KTensor(t)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to dequantize Q6_K tensor: %v", err))
+		}
+		return d
+	default:
+		return t
+	}
+}
+
 // MatMul performs matrix multiplication: C = A @ B
 // A: [M x K], B: [K x N] -> C: [M x N]
 //
-// Supports lazy dequantization for Q5_K weight tensors:
-//   - If B is Q5_K, it will be dequantized on-the-fly during multiplication
-//   - This avoids pre-loading entire weight matrices into memory
+// Supports quantized weight tensors (Q4_K, Q5_K, Q6_K):
+//   - Quantized tensors are dequantized to Float32 before multiplication
+//   - Weight cache (if enabled) avoids redundant dequantization
 func MatMul(a, b *Tensor) *Tensor {
 	// Validate dimensions
 	if len(a.shape) != 2 || len(b.shape) != 2 {
@@ -25,129 +52,29 @@ func MatMul(a, b *Tensor) *Tensor {
 		panic(fmt.Sprintf("MatMul dimension mismatch: [%d x %d] @ [%d x %d]", M, K, K2, N))
 	}
 
-	// Handle quantized tensors
-	// Current approach: Dequantize then MatMul (fastest - ~500µs for 128×128)
-	// Fused approaches are slower despite memory savings:
-	//   - Phase 2 Optimized: 11ms (23x slower)
-	//   - Phase 3 Blocked: 11-93ms (worse)
-	// TODO: Investigate SIMD/assembly optimizations for fused approach
-	
-	// If B is Q4_K (common case for weights), dequantize then matmul
-	if b.dtype == Q4_K {
-		bDequantized, err := DequantizeQ4_KTensor(b)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q4_K tensor: %v", err))
-		}
-		b = bDequantized
-	}
-
-	// If B is Q5_K (common case for weights), dequantize then matmul
-	if b.dtype == Q5_K {
-		bDequantized, err := DequantizeQ5_KTensor(b)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))
-		}
-		b = bDequantized
-	}
-
-	// If B is Q6_K (common case for weights), dequantize then matmul
-	if b.dtype == Q6_K {
-		bDequantized, err := DequantizeQ6_KTensor(b)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q6_K tensor: %v", err))
-		}
-		b = bDequantized
-	}
-
-	// If A is quantized, dequantize it (less common)
-	if a.dtype == Q4_K {
-		aDequantized, err := DequantizeQ4_KTensor(a)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q4_K tensor: %v", err))
-		}
-		a = aDequantized
-	}
-
-	// If A is Q5_K, dequantize it (less common)
-	if a.dtype == Q5_K {
-		bDequantized, err := DequantizeQ5_KTensor(b)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))
-		}
-		b = bDequantized
-	}
-
-	// If B is Q6_K (common case for weights), dequantize it
-	if b.dtype == Q6_K {
-		bDequantized, err := DequantizeQ6_KTensor(b)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q6_K tensor: %v", err))
-		}
-		b = bDequantized
-	}
-
-	// If A is quantized, dequantize it (less common)
-	if a.dtype == Q4_K {
-		aDequantized, err := DequantizeQ4_KTensor(a)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q4_K tensor: %v", err))
-		}
-		a = aDequantized
-	}
-
-	// If A is Q5_K, dequantize it (less common)
-	if a.dtype == Q5_K {
-		bDequantized, err := DequantizeQ5_KTensor(b)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))
-		}
-		b = bDequantized
-	}
-
-	// If B is Q6_K (common case for weights), dequantize it
-	if b.dtype == Q6_K {
-		bDequantized, err := DequantizeQ6_KTensor(b)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q6_K tensor: %v", err))
-		}
-		b = bDequantized
-	}
-
-	// If A is quantized, dequantize it (less common)
-	if a.dtype == Q5_K {
-		aDequantized, err := DequantizeQ5_KTensor(a)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q5_K tensor: %v", err))
-		}
-		a = aDequantized
-	}
-
-	// If A is Q6_K, dequantize it (less common)
-	if a.dtype == Q6_K {
-		aDequantized, err := DequantizeQ6_KTensor(a)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to dequantize Q6_K tensor: %v", err))
-		}
-		a = aDequantized
-	}
+	// Dequantize quantized tensors to Float32 before matmul
+	// For B (weights), use cache to avoid redundant dequantization + transposition
+	a = dequantIfNeeded(a)
+	b = b.GetOrDequantTranspose()
 
 	// Dispatch to best implementation based on size and SIMD availability
+
+	// Special case: M=1 (decode step) — use optimized single-row kernel
+	if M == 1 && (HasAVX2() || HasNEON()) {
+		return matmulSIMDSingleRow(a, b)
+	}
+
 	ops := M * N * K
 
 	if HasAVX2() || HasNEON() {
-		// SIMD-optimized implementations
 		if ops < 1024 {
-			// Small matrices: use SIMD
 			return matmulSIMD(a, b)
 		} else if ops < 1024*1024 {
-			// Medium matrices: use SIMD blocked
 			return matmulSIMDBlocked(a, b)
 		} else {
-			// Large matrices: use SIMD parallel
 			return matmulSIMDParallel(a, b)
 		}
 	} else {
-		// Fallback to non-SIMD implementations
 		if ops < 1024 {
 			return matmulNaive(a, b)
 		} else if ops < 1024*1024 {

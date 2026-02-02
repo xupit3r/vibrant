@@ -93,28 +93,46 @@ func (e *Embeddings) Forward(tokenIDs [][]int) (*tensor.Tensor, error) {
 
 	// Create output tensor: [batch_size, seq_len, hidden_dim]
 	output := tensor.NewTensor([]int{batchSize, seqLen, e.hiddenDim}, tensor.Float32)
+	oData := output.Data().([]float32)
 
 	// Look up embeddings
-	// For each token ID, copy the corresponding row/column from the weight matrix
-	// GGUF stores embeddings as [hidden_dim, vocab_size] so we need to access column for each token
 	weightShape := e.weight.Shape()
 	transposed := weightShape[0] == e.hiddenDim // true if [hidden_dim, vocab_size]
 
-	for b := 0; b < batchSize; b++ {
-		for s := 0; s < seqLen; s++ {
-			tokenID := tokenIDs[b][s]
+	// For quantized embeddings, we need At() -- but for Float32 we can use direct access
+	if e.weight.DType() == tensor.Float32 {
+		wData := e.weight.Data().([]float32)
+		for b := 0; b < batchSize; b++ {
+			for s := 0; s < seqLen; s++ {
+				tokenID := tokenIDs[b][s]
+				outOff := (b*seqLen + s) * e.hiddenDim
 
-			// Get embedding vector for this token
-			for d := 0; d < e.hiddenDim; d++ {
-				var val float32
 				if transposed {
-					// Weight is [hidden_dim, vocab_size], access weight[d, tokenID]
-					val = e.weight.At(d, tokenID)
+					// Weight is [hidden_dim, vocab_size] -- need to gather column
+					for d := 0; d < e.hiddenDim; d++ {
+						oData[outOff+d] = wData[d*e.vocabSize+tokenID]
+					}
 				} else {
-					// Weight is [vocab_size, hidden_dim], access weight[tokenID, d]
-					val = e.weight.At(tokenID, d)
+					// Weight is [vocab_size, hidden_dim] -- copy row directly
+					wOff := tokenID * e.hiddenDim
+					copy(oData[outOff:outOff+e.hiddenDim], wData[wOff:wOff+e.hiddenDim])
 				}
-				output.Set(val, b, s, d)
+			}
+		}
+	} else {
+		// Fallback for quantized embeddings -- use At()
+		for b := 0; b < batchSize; b++ {
+			for s := 0; s < seqLen; s++ {
+				tokenID := tokenIDs[b][s]
+				outOff := (b*seqLen + s) * e.hiddenDim
+
+				for d := 0; d < e.hiddenDim; d++ {
+					if transposed {
+						oData[outOff+d] = e.weight.At(d, tokenID)
+					} else {
+						oData[outOff+d] = e.weight.At(tokenID, d)
+					}
+				}
 			}
 		}
 	}

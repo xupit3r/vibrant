@@ -8,25 +8,36 @@ import (
 
 // RoPE implements Rotary Positional Embeddings
 type RoPE struct {
-	freqs *tensor.Tensor // Precomputed frequencies [head_dim/2]
-	dim   int            // Head dimension
+	cosTable []float32 // Precomputed cos values [maxSeqLen * halfDim]
+	sinTable []float32 // Precomputed sin values [maxSeqLen * halfDim]
+	dim      int       // Head dimension
+	halfDim  int       // Half of head dimension
 }
 
-// NewRoPE creates a RoPE layer
+// NewRoPE creates a RoPE layer with precomputed cos/sin lookup tables
 func NewRoPE(headDim int, freqBase float64, maxSeqLen int) *RoPE {
-	// Precompute frequencies for each dimension pair
-	// freq[i] = 1.0 / (base^(2*i/dim))
 	halfDim := headDim / 2
-	freqs := tensor.NewTensor([]int{halfDim}, tensor.Float32)
+	tableSize := maxSeqLen * halfDim
 
-	for i := 0; i < halfDim; i++ {
-		freq := 1.0 / math.Pow(freqBase, float64(2*i)/float64(headDim))
-		freqs.Set(float32(freq), i)
+	cosTable := make([]float32, tableSize)
+	sinTable := make([]float32, tableSize)
+
+	// Precompute cos/sin for all positions and dimension pairs
+	for pos := 0; pos < maxSeqLen; pos++ {
+		base := pos * halfDim
+		for i := 0; i < halfDim; i++ {
+			freq := 1.0 / math.Pow(freqBase, float64(2*i)/float64(headDim))
+			angle := float64(pos) * freq
+			cosTable[base+i] = float32(math.Cos(angle))
+			sinTable[base+i] = float32(math.Sin(angle))
+		}
 	}
 
 	return &RoPE{
-		freqs: freqs,
-		dim:   headDim,
+		cosTable: cosTable,
+		sinTable: sinTable,
+		dim:      headDim,
+		halfDim:  halfDim,
 	}
 }
 
@@ -48,34 +59,35 @@ func (r *RoPE) ApplyRotation(x *tensor.Tensor, positions []int) (*tensor.Tensor,
 	// Create output tensor
 	output := tensor.NewTensor(shape, tensor.Float32)
 
-	halfDim := headDim / 2
+	// Direct slice access — no At()/Set() calls
+	xData := x.Data().([]float32)
+	outData := output.Data().([]float32)
 
-	// Apply rotation to each element
+	halfDim := r.halfDim
+	cosTable := r.cosTable
+	sinTable := r.sinTable
+
+	// Precompute strides
+	headStride := seqLen * headDim
+	batchStride := numHeads * headStride
+
 	for b := 0; b < batchSize; b++ {
+		bOff := b * batchStride
 		for h := 0; h < numHeads; h++ {
+			hOff := bOff + h*headStride
 			for s := 0; s < seqLen; s++ {
-				pos := float64(positions[s])
+				sOff := hOff + s*headDim
+				tOff := positions[s] * halfDim
 
-				// Process pairs of dimensions
 				for i := 0; i < halfDim; i++ {
-					freq := float64(r.freqs.At(i))
-					angle := pos * freq
+					c := cosTable[tOff+i]
+					sn := sinTable[tOff+i]
 
-					cos := math.Cos(angle)
-					sin := math.Sin(angle)
+					x0 := xData[sOff+2*i]
+					x1 := xData[sOff+2*i+1]
 
-					// Get the pair of values
-					x0 := float64(x.At(b, h, s, 2*i))
-					x1 := float64(x.At(b, h, s, 2*i+1))
-
-					// Apply rotation
-					// [cos -sin] [x0]
-					// [sin  cos] [x1]
-					y0 := x0*cos - x1*sin
-					y1 := x0*sin + x1*cos
-
-					output.Set(float32(y0), b, h, s, 2*i)
-					output.Set(float32(y1), b, h, s, 2*i+1)
+					outData[sOff+2*i] = x0*c - x1*sn
+					outData[sOff+2*i+1] = x0*sn + x1*c
 				}
 			}
 		}

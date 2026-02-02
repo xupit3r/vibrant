@@ -239,11 +239,12 @@ func extractLastTokenLogits(logits *tensor.Tensor, shape []int) *tensor.Tensor {
 	// Extract the last token's logits from batch 0
 	// [batch=1, seq, vocab] -> [vocab]
 	result := tensor.NewTensor([]int{vocabSize}, tensor.Float32)
+	src := logits.Data().([]float32)
+	dst := result.Data().([]float32)
 
-	for v := 0; v < vocabSize; v++ {
-		val := logits.At(0, seqLen-1, v)
-		result.Set(val, v)
-	}
+	// Last token of batch 0: offset = 0*seqLen*vocabSize + (seqLen-1)*vocabSize
+	srcOff := (seqLen - 1) * vocabSize
+	copy(dst, src[srcOff:srcOff+vocabSize])
 
 	return result
 }

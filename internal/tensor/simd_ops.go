@@ -56,26 +56,45 @@ func vectorDivScalar(dst, a []float32, scalar float32) {
 }
 
 // vectorDotProduct computes dot product with SIMD optimization
+// Uses 8-way accumulation to match AVX2 register width (8 x float32)
 func vectorDotProduct(a, b []float32) float32 {
-	// Accumulate in 4 separate variables to help with SIMD
-	// This allows parallel execution of 4 independent accumulations
-	sum0, sum1, sum2, sum3 := float32(0), float32(0), float32(0), float32(0)
-
-	// Process 4 elements at a time
+	var s0, s1, s2, s3, s4, s5, s6, s7 float32
+	n := len(a)
 	i := 0
-	for ; i+3 < len(a); i += 4 {
-		sum0 += a[i+0] * b[i+0]
-		sum1 += a[i+1] * b[i+1]
-		sum2 += a[i+2] * b[i+2]
-		sum3 += a[i+3] * b[i+3]
+	for ; i+7 < n; i += 8 {
+		s0 += a[i] * b[i]
+		s1 += a[i+1] * b[i+1]
+		s2 += a[i+2] * b[i+2]
+		s3 += a[i+3] * b[i+3]
+		s4 += a[i+4] * b[i+4]
+		s5 += a[i+5] * b[i+5]
+		s6 += a[i+6] * b[i+6]
+		s7 += a[i+7] * b[i+7]
 	}
-
-	// Handle remaining elements
-	for ; i < len(a); i++ {
-		sum0 += a[i] * b[i]
+	for ; i < n; i++ {
+		s0 += a[i] * b[i]
 	}
+	return s0 + s1 + s2 + s3 + s4 + s5 + s6 + s7
+}
 
-	return sum0 + sum1 + sum2 + sum3
+// vectorScaleAdd performs dst[i] += src[i] * scale (SAXPY operation)
+// Uses 8-way accumulation to match AVX2 register width
+func vectorScaleAdd(dst, src []float32, scale float32) {
+	n := len(dst)
+	i := 0
+	for ; i+7 < n; i += 8 {
+		dst[i] += src[i] * scale
+		dst[i+1] += src[i+1] * scale
+		dst[i+2] += src[i+2] * scale
+		dst[i+3] += src[i+3] * scale
+		dst[i+4] += src[i+4] * scale
+		dst[i+5] += src[i+5] * scale
+		dst[i+6] += src[i+6] * scale
+		dst[i+7] += src[i+7] * scale
+	}
+	for ; i < n; i++ {
+		dst[i] += src[i] * scale
+	}
 }
 
 // vectorSum computes sum of all elements with SIMD optimization
