@@ -1,6 +1,8 @@
 package gguf
 
 import (
+	"fmt"
+	
 	"github.com/xupit3r/vibrant/internal/tensor"
 )
 
@@ -21,6 +23,36 @@ const (
 	GGML_TYPE_Q6_K GGMLType = 14 // 6-bit k-quant
 	GGML_TYPE_Q8_K GGMLType = 15 // 8-bit k-quant
 )
+
+// String returns the string representation of the GGML type
+func (g GGMLType) String() string {
+	switch g {
+	case GGML_TYPE_F32:
+		return "F32"
+	case GGML_TYPE_F16:
+		return "F16"
+	case GGML_TYPE_Q4_0:
+		return "Q4_0"
+	case GGML_TYPE_Q4_1:
+		return "Q4_1"
+	case GGML_TYPE_Q5_0:
+		return "Q5_0"
+	case GGML_TYPE_Q5_1:
+		return "Q5_1"
+	case GGML_TYPE_Q8_0:
+		return "Q8_0"
+	case GGML_TYPE_Q4_K:
+		return "Q4_K"
+	case GGML_TYPE_Q5_K:
+		return "Q5_K"
+	case GGML_TYPE_Q6_K:
+		return "Q6_K"
+	case GGML_TYPE_Q8_K:
+		return "Q8_K"
+	default:
+		return fmt.Sprintf("UNKNOWN(%d)", g)
+	}
+}
 
 // ValueType represents metadata value types in GGUF files
 type ValueType uint32
