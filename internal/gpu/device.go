@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"unsafe"
 )
 
 // Device represents a compute device (CPU or GPU)
@@ -177,4 +178,8 @@ func (b *cpuBuffer) Free() error {
 
 func (b *cpuBuffer) Device() Device {
 	return NewCPUDevice()
+}
+
+func (b *cpuBuffer) MetalBuffer() unsafe.Pointer {
+	return nil
 }

@@ -336,3 +336,9 @@ func (b *metalBuffer) Free() error {
 func (b *metalBuffer) Device() Device {
 	return b.device
 }
+
+func (b *metalBuffer) MetalBuffer() unsafe.Pointer {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.ptr
+}

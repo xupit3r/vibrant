@@ -1,5 +1,7 @@
 package gpu
 
+import "unsafe"
+
 // Buffer represents a GPU memory buffer
 type Buffer interface {
 	// Size returns the size of the buffer in bytes
@@ -20,4 +22,8 @@ type Buffer interface {
 
 	// Device returns the device that owns this buffer
 	Device() Device
+
+	// MetalBuffer returns the underlying MTLBuffer pointer (Metal only)
+	// Returns nil for non-Metal buffers
+	MetalBuffer() unsafe.Pointer
 }
