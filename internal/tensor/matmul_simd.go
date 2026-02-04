@@ -28,12 +28,15 @@ func matmulSIMD(a, b *Tensor) *Tensor {
 
 		// Check if B is already pre-transposed (optimization for weight matrices)
 		var bTransposed []float32
+		needsReturn := false // Track if we need to return buffer to pool
 		if b.IsTransposed() {
 			// B is already in [N, K] format (transposed), use it directly
 			bTransposed = bData
 		} else {
 			// Transpose B for better cache locality
-			bTransposed = make([]float32, K*N)
+			// Use buffer pool to avoid allocation
+			bTransposed = GlobalTensorPool.Get(K * N)
+			needsReturn = true
 			for k := 0; k < K; k++ {
 				for j := 0; j < N; j++ {
 					bTransposed[j*K+k] = bData[k*N+j]
@@ -51,6 +54,11 @@ func matmulSIMD(a, b *Tensor) *Tensor {
 				bRow := bTransposed[j*K : (j+1)*K]
 				cRow[j] = vectorDotProduct(aRow, bRow)
 			}
+		}
+
+		// Return buffer to pool if we allocated it
+		if needsReturn {
+			GlobalTensorPool.Put(bTransposed)
 		}
 
 	default:
@@ -210,6 +218,7 @@ func matmulSIMDParallel(a, b *Tensor) *Tensor {
 		cData := result.data.([]float32)
 
 		var bTransposed []float32
+		needsReturn := false // Track if we need to return buffer to pool
 
 		// Check if B is already transposed (pre-transposed weight matrix)
 		if b.IsTransposed() {
@@ -217,7 +226,9 @@ func matmulSIMDParallel(a, b *Tensor) *Tensor {
 			bTransposed = bData
 		} else {
 			// Transpose B for better cache locality (runtime cost)
-			bTransposed = make([]float32, K*N)
+			// Use buffer pool to avoid allocation
+			bTransposed = GlobalTensorPool.Get(K * N)
+			needsReturn = true
 			for k := 0; k < K; k++ {
 				for j := 0; j < N; j++ {
 					bTransposed[j*K+k] = bData[k*N+j]
@@ -251,6 +262,11 @@ func matmulSIMDParallel(a, b *Tensor) *Tensor {
 		}
 
 		wg.Wait()
+
+		// Return buffer to pool if we allocated it
+		if needsReturn {
+			GlobalTensorPool.Put(bTransposed)
+		}
 
 	default:
 		panic("matmulSIMDParallel not implemented for this dtype")

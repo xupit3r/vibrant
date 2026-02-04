@@ -95,6 +95,7 @@ type Tensor struct {
 
 	// Optimization flags
 	transposed bool // True if this is a pre-transposed weight matrix (for matmul optimization)
+	pooled     bool // True if allocated from tensor pool (should be returned via PutTensor)
 
 	// Weight cache (for avoiding redundant dequantization)
 	dequantCache *Tensor // Cached Float32 pre-transposed copy
