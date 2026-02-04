@@ -39,6 +39,10 @@ func dequantIfNeeded(t *Tensor) *Tensor {
 // Supports quantized weight tensors (Q4_K, Q5_K, Q6_K):
 //   - Quantized tensors are dequantized to Float32 before multiplication
 //   - Weight cache (if enabled) avoids redundant dequantization
+//
+// GPU acceleration:
+//   - If both tensors are on GPU, uses Metal kernel
+//   - Otherwise falls back to CPU implementation
 func MatMul(a, b *Tensor) *Tensor {
 	// Validate dimensions
 	if len(a.shape) != 2 || len(b.shape) != 2 {
@@ -52,7 +56,16 @@ func MatMul(a, b *Tensor) *Tensor {
 		panic(fmt.Sprintf("MatMul dimension mismatch: [%d x %d] @ [%d x %d]", M, K, K2, N))
 	}
 
-	// Dequantize quantized tensors to Float32 before matmul
+	// Check if both tensors are on GPU
+	if a.IsOnGPU() && b.IsOnGPU() {
+		result := matmulGPU(a, b)
+		if result != nil {
+			return result
+		}
+		// Fall through to CPU if GPU fails
+	}
+
+	// CPU path: Dequantize quantized tensors to Float32 before matmul
 	// For B (weights), use cache to avoid redundant dequantization + transposition
 	a = dequantIfNeeded(a)
 	b = b.GetOrDequantTranspose()

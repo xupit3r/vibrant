@@ -8,11 +8,21 @@ import (
 // Element-wise Operations
 
 // Add performs element-wise addition: C = A + B
+// Supports GPU acceleration when both tensors are on GPU
 func Add(a, b *Tensor) *Tensor {
 	if !shapesMatch(a.shape, b.shape) {
 		panic(fmt.Sprintf("shape mismatch: %v vs %v", a.shape, b.shape))
 	}
 
+	// Try GPU path first
+	if a.IsOnGPU() && b.IsOnGPU() {
+		result := addGPU(a, b)
+		if result != nil {
+			return result
+		}
+	}
+
+	// CPU fallback
 	result := NewTensor(a.shape, a.dtype)
 
 	switch a.dtype {
@@ -52,11 +62,21 @@ func Sub(a, b *Tensor) *Tensor {
 }
 
 // Mul performs element-wise multiplication: C = A * B
+// Supports GPU acceleration when both tensors are on GPU
 func Mul(a, b *Tensor) *Tensor {
 	if !shapesMatch(a.shape, b.shape) {
 		panic(fmt.Sprintf("shape mismatch: %v vs %v", a.shape, b.shape))
 	}
 
+	// Try GPU path first
+	if a.IsOnGPU() && b.IsOnGPU() {
+		result := mulGPU(a, b)
+		if result != nil {
+			return result
+		}
+	}
+
+	// CPU fallback
 	result := NewTensor(a.shape, a.dtype)
 
 	switch a.dtype {
