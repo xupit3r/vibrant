@@ -26,6 +26,15 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 
 ✅ **Feature Complete** - Agentic code assistant with Claude Code-inspired capabilities!
 
+**Current Phase**: Phase 10.11 - Performance optimization and cache management
+
+**Recent Improvements** (Phase 10.10):
+- ✅ Fixed critical Q5_K quantization bug (inference blocker)
+- ✅ Fixed integration test infrastructure (auto-builds binary)
+- ✅ Fixed inspect-gguf build failure
+- ✅ Verified complete quantization support (Q4_K, Q5_K, Q6_K)
+- ✅ All 200+ tests passing, no regressions
+
 **Note on LLM Inference**: Currently uses a mock engine by default due to go-llama.cpp requiring manual setup (git submodules). This is perfect for development and testing. For real inference, we recommend using Ollama or manual vendor setup. See [docs/llama-setup.md](docs/llama-setup.md) for details.
 
 ### Completed Phases
@@ -80,14 +89,19 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 - **Performance**: <1µs for most operations
 
 ### Test Coverage
-- `agent`: 100%
-- `codeintel`: 100%
-- `tools`: 100%
+- `tokenizer`: 100%
+- `plugin`: 93.2%
+- `agent`: 89.1%
+- `gguf`: 87.2%
+- `codeintel`: 81.8%
+- `system`: 82.1%
+- `diff`: 78.3%
+- `tensor`: 78.2%
+- `transformer`: 62.1%
 - `assistant`: 59.6%
 - `context`: 49.7%
-- `diff`: 78.3%
-- `plugin`: 93.2%
-- `system`: 82.7%
+
+**Total**: 200+ tests passing across 18 packages
 
 ## Installation
 

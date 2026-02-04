@@ -368,6 +368,8 @@ func matmulNEON(a, b *Tensor) *Tensor {
 
 ### Q4_K Format
 
+**Status**: ✅ Fully implemented and tested
+
 ```go
 // Q4_K: 4-bit quantization with k-quant strategy
 // Block size: 256 values per block
@@ -378,71 +380,77 @@ type Q4_K_Block struct {
 }
 
 // Quantize converts float32 to Q4_K
-func QuantizeQ4_K(src []float32) []Q4_K_Block {
-    numBlocks := (len(src) + 255) / 256
-    blocks := make([]Q4_K_Block, numBlocks)
-
-    for i := 0; i < numBlocks; i++ {
-        start := i * 256
-        end := min(start+256, len(src))
-        block := src[start:end]
-
-        // Compute scales and mins for each sub-block (256/12 ≈ 21 values each)
-        for j := 0; j < 12; j++ {
-            subStart := j * 21
-            subEnd := min(subStart+21, len(block))
-            sub := block[subStart:subEnd]
-
-            // Find min/max
-            min, max := findMinMax(sub)
-            blocks[i].scales[j] = float16((max - min) / 15.0)  // 4-bit: 0-15
-            blocks[i].mins[j] = float16(min)
-
-            // Quantize values
-            scale := float32(blocks[i].scales[j])
-            for k, val := range sub {
-                quantized := uint8((val - min) / scale)
-                quantized = clamp(quantized, 0, 15)
-
-                // Pack 2 values per byte
-                idx := (subStart + k) / 2
-                if (subStart+k)%2 == 0 {
-                    blocks[i].qs[idx] = quantized
-                } else {
-                    blocks[i].qs[idx] |= quantized << 4
-                }
-            }
-        }
-    }
-    return blocks
-}
-
+func QuantizeQ4_K(src []float32) []Q4_K_Block
 // Dequantize converts Q4_K to float32
-func DequantizeQ4_K(blocks []Q4_K_Block, dst []float32) {
-    for i, block := range blocks {
-        baseIdx := i * 256
+func DequantizeQ4_K(blocks []Q4_K_Block, dst []float32)
 
-        for j := 0; j < 12; j++ {
-            scale := float32(block.scales[j])
-            min := float32(block.mins[j])
+// Tests: 3 tests passing
+// - TestQuantizeQ4_K_Roundtrip
+// - TestDequantizeQ4_KElement
+// - TestDequantizeQ4_KTensor
+```
 
-            subStart := j * 21
-            for k := 0; k < 21 && baseIdx+subStart+k < len(dst); k++ {
-                // Unpack 4-bit value
-                byteIdx := (subStart + k) / 2
-                nibble := block.qs[byteIdx]
-                if (subStart+k)%2 == 0 {
-                    nibble &= 0x0F
-                } else {
-                    nibble >>= 4
-                }
+### Q5_K Format
 
-                // Dequantize
-                dst[baseIdx+subStart+k] = float32(nibble)*scale + min
-            }
-        }
-    }
+**Status**: ✅ Fully implemented and tested (bug fixed in Phase 10.10)
+
+```go
+// Q5_K: 5-bit quantization with k-quant strategy
+// Block size: 256 values per super-block (8 sub-blocks of 32 values)
+// Each sub-block has its own 6-bit scale and min
+type Q5_K_Block struct {
+    d     float16      // Super-block scale
+    dmin  float16      // Super-block min scale
+    scales [12]uint8   // 8 6-bit scales packed into 6 bytes
+    qh    [32]uint8    // High bits (5th bit of each value)
+    qs    [128]uint8   // Low 4 bits of quantized values
 }
+
+// Quantize converts float32 to Q5_K
+func QuantizeQ5_K(src []float32) []Q5_K_Block
+// Dequantize converts Q5_K to float32
+func DequantizeQ5_K(blocks []Q5_K_Block, dst []float32)
+
+// Helper for proper 6-bit scale packing (added in Phase 10.10)
+func packScalesAndMins(scales, mins []float32) [12]uint8
+
+// Tests: 14 tests passing
+// - All roundtrip tests now pass (bug fixed)
+// - Element and tensor dequantization tests
+// - Integration tests with quantization tolerance
+```
+
+**Phase 10.10 Bug Fix**:
+- Fixed critical bug in `QuantizeQ5_K()` scale packing
+- Implemented missing `packScalesAndMins()` helper function
+- Scales and mins are 6-bit values (0-63) packed into 12 bytes
+- Bug was causing loop to set same array indices 8 times instead of packing all values
+- All Q5_K tests now passing with proper roundtrip validation
+
+### Q6_K Format
+
+**Status**: ✅ Fully implemented and tested
+
+```go
+// Q6_K: 6-bit quantization with k-quant strategy
+// Higher quality than Q5_K, still compressed
+type Q6_K_Block struct {
+    ql    [128]uint8   // Lower 4 bits
+    qh    [64]uint8    // Upper 2 bits
+    scales [16]int8    // Scales (one per 16 values)
+    d     float16      // Block scale
+}
+
+// Quantize converts float32 to Q6_K
+func QuantizeQ6_K(src []float32) []Q6_K_Block
+// Dequantize converts Q6_K to float32
+func DequantizeQ6_K(blocks []Q6_K_Block, dst []float32)
+
+// Tests: 18 tests passing
+// - Comprehensive roundtrip tests
+// - Bit packing tests
+// - Element and tensor dequantization
+// - Integration tests
 ```
 
 ## Memory Management

@@ -94,6 +94,25 @@ const (
     GGML_TYPE_Q6_K GGMLType = 14  // 6-bit k-quant
     GGML_TYPE_Q8_K GGMLType = 15  // 8-bit k-quant
 )
+
+// String returns human-readable type name (added in Phase 10.10)
+func (t GGMLType) String() string {
+    switch t {
+    case GGML_TYPE_F32:
+        return "F32"
+    case GGML_TYPE_F16:
+        return "F16"
+    case GGML_TYPE_Q4_K:
+        return "Q4_K"
+    case GGML_TYPE_Q5_K:
+        return "Q5_K"
+    case GGML_TYPE_Q6_K:
+        return "Q6_K"
+    // ... other types
+    default:
+        return fmt.Sprintf("Unknown(%d)", t)
+    }
+}
 ```
 
 ### Metadata Value Types

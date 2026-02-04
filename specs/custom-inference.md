@@ -463,6 +463,35 @@ func TestSampler(t *testing.T) {
 
 ### Integration Tests
 
+**Phase 10.10 Improvements**:
+- ✅ Fixed integration test infrastructure
+- ✅ Added `TestMain()` to auto-build vibrant binary before tests
+- ✅ All 11 integration tests now passing automatically
+- ✅ No manual binary build required
+
+```go
+// test/integration/completion_test.go
+func TestMain(m *testing.M) {
+    // Build binary before running tests
+    projectRoot, _ := filepath.Abs("../..")
+    cmd := exec.Command("go", "build", "-o", "vibrant", "./cmd/vibrant")
+    cmd.Dir = projectRoot
+    if err := cmd.Run(); err != nil {
+        fmt.Fprintf(os.Stderr, "Failed to build vibrant: %v\n", err)
+        os.Exit(1)
+    }
+
+    // Run tests
+    code := m.Run()
+
+    // Cleanup
+    os.Remove(filepath.Join(projectRoot, "vibrant"))
+    os.Exit(code)
+}
+```
+
+### End-to-End Tests
+
 ```go
 func TestEndToEndGeneration(t *testing.T) {
     // Load small test model
