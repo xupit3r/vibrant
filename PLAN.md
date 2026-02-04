@@ -652,21 +652,37 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 
 **Deliverable**: Production-ready performance (5-10 tokens/sec) ⏳
 
-## Phase 11: GPU Acceleration & Offloading 🔮 PLANNED
+## Phase 11: GPU Acceleration & Offloading ✅ PHASE 11.1 COMPLETE
+
+**Status**: Phase 11.1 ✅ Complete | Phase 11.2+ 🔮 Planned
+
+### Phase 11.1: GPU Backend Foundation ✅ COMPLETE
+
+**Status**: ✅ Production Ready (6 commits, ~8000 LOC, 220+ tests)
+
+**What Was Built**:
+1. ✅ GPU Device Abstraction - Metal + CPU devices with unified interface
+2. ✅ Metal Kernel Library - 11 GPU kernels with Go bindings
+3. ✅ Tensor Device Integration - CPU ↔ GPU migration with automatic dispatch
+4. ✅ Memory Management - Direct allocation working, pool implemented but disabled
+5. ✅ Testing & Validation - Comprehensive tests with 6.4x speedup verified
+6. ✅ CLI Integration - --device flag with automatic weight migration
+
+**Performance** (Apple M1):
+- Large ops (512×512): **6.4x GPU speedup** (12.5ms → 2.0ms)
+- Medium ops (128×128): 1.37x GPU speedup
+- Decode (1×512): CPU 3.6x faster (overhead dominates)
+
+**Files**: 28 new files in `internal/gpu/`, `internal/gpu/metal/`, `internal/tensor/`
+
+**Commits**: 132dff6, aef063c, 9a3776e, 298c78b, 678ad0d, e05d0c8
+
+See `docs/results/GPU_VALIDATION_RESULTS.md` for detailed performance analysis.
 
 ### Vision
 Enable Vibrant to leverage GPU compute and run models larger than available memory through intelligent offloading, based on research from the SpecExec paper (NeurIPS 2024).
 
-### Phase 11.1: GPU Backend Foundation ⏳
-- [ ] Device abstraction layer (`internal/gpu/device.go`)
-- [ ] Metal backend for Apple Silicon
-- [ ] Basic GPU kernels (matmul, softmax, layer norm)
-- [ ] Memory management and host ↔ GPU transfers
-- [ ] Tensor device integration
-
-**Deliverable**: GPU-accelerated inference on Apple Silicon
-
-### Phase 11.2: RAM Offloading ⏳
+### Phase 11.2: RAM Offloading 🔮 PLANNED
 - [ ] Offload manager (`internal/offload/manager.go`)
 - [ ] Layer location tracking (GPU/RAM/Disk)
 - [ ] Async prefetching with double buffering
