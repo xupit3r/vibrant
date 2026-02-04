@@ -119,6 +119,50 @@ func extractScalesAndMins(scales [12]uint8) (sc [8]uint8, m [8]uint8) {
 	return sc, m
 }
 
+// packScalesAndMins packs 8 6-bit scale and min values into a 12-byte array.
+// This is the inverse of extractScalesAndMins, used for quantization.
+//
+// Parameters:
+//   - scales: 12-byte output array to pack into
+//   - sc: scale value (6-bit, 0-63) to use for all 8 sub-blocks
+//   - m: min value (6-bit, 0-63) to use for all 8 sub-blocks
+func packScalesAndMins(scales []uint8, sc uint8, m uint8) {
+	// Clear the array first
+	for i := range scales[:12] {
+		scales[i] = 0
+	}
+
+	// Pack 8 copies of sc into first 6 bytes (inverse of extract)
+	scales[0] = sc & 0x3F
+	scales[0] |= (sc & 0x03) << 6
+	scales[1] = (sc & 0x3C) >> 2
+	scales[1] |= (sc & 0x0F) << 4
+	scales[2] = (sc & 0x30) >> 4
+	scales[2] |= (sc & 0x3F) << 2
+
+	scales[3] = sc & 0x3F
+	scales[3] |= (sc & 0x03) << 6
+	scales[4] = (sc & 0x3C) >> 2
+	scales[4] |= (sc & 0x0F) << 4
+	scales[5] = (sc & 0x30) >> 4
+	scales[5] |= (sc & 0x3F) << 2
+
+	// Pack 8 copies of m into next 6 bytes (same pattern)
+	scales[6] = m & 0x3F
+	scales[6] |= (m & 0x03) << 6
+	scales[7] = (m & 0x3C) >> 2
+	scales[7] |= (m & 0x0F) << 4
+	scales[8] = (m & 0x30) >> 4
+	scales[8] |= (m & 0x3F) << 2
+
+	scales[9] = m & 0x3F
+	scales[9] |= (m & 0x03) << 6
+	scales[10] = (m & 0x3C) >> 2
+	scales[10] |= (m & 0x0F) << 4
+	scales[11] = (m & 0x30) >> 4
+	scales[11] |= (m & 0x3F) << 2
+}
+
 // DequantizeQ5_KElement dequantizes a single element from a Q5_K tensor.
 // This is used for on-demand dequantization in Tensor.At().
 //
@@ -300,15 +344,27 @@ func QuantizeQ5_K(input []float32) ([]BlockQ5_K, error) {
 
 		// Simplified quantization (not optimized, just for testing)
 		// In practice, Q5_K uses more sophisticated quantization with sub-blocks
-		block.D = float32ToFloat16(scale)
-		block.Dmin = float32ToFloat16(min)
+		//
+		// For Q5_K: scale = D * sc[subblock] and min_offset = Dmin * m[subblock]
+		// We use a simplified approach: all sub-blocks get the same scale factor
+		block.D = float32ToFloat16(1.0) // Super-block scale set to 1.0
+		block.Dmin = float32ToFloat16(1.0) // Super-block min scale set to 1.0
 
-		// For testing purposes, use simplified sub-block scales
-		// All sub-blocks get same scale/min
-		for i := 0; i < 8; i++ {
-			block.Scales[0] = 32 // Middle value for 6-bit (0-63)
-			block.Scales[6] = 32
+		// Pack sub-block scales into the Scales array
+		// For simplicity, use the actual scale/min values (quantized to 6 bits)
+		// sc[i] will contain the scale, m[i] will contain the min
+		scaleQ := uint8(scale)
+		if scaleQ > 63 {
+			scaleQ = 63
 		}
+		minQ := uint8(min)
+		if minQ > 63 {
+			minQ = 63
+		}
+
+		// Pack 8 scales into first 6 bytes
+		// All sub-blocks get the same scale for testing
+		packScalesAndMins(block.Scales[:], scaleQ, minQ)
 
 		// Quantize values
 		for i := offset; i < endIdx; i++ {
