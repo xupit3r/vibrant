@@ -31,6 +31,7 @@ var (
 	askNoStream    bool
 	askNoContext   bool
 	askSave        string
+	askDevice      string
 )
 
 func init() {
@@ -42,6 +43,7 @@ func init() {
 	askCmd.Flags().BoolVar(&askNoStream, "no-stream", false, "disable streaming output")
 	askCmd.Flags().BoolVar(&askNoContext, "no-context", false, "disable automatic context gathering")
 	askCmd.Flags().StringVarP(&askSave, "save", "s", "", "save response to file (default: ~/.vibrant/conversations/response_<timestamp>.md)")
+	askCmd.Flags().StringVar(&askDevice, "device", "cpu", "device to use: cpu, gpu, or auto")
 
 	rootCmd.AddCommand(askCmd)
 }
@@ -119,6 +121,11 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	fmt.Println("Loading model into memory...")
 	llmMgr := llm.NewManager(modelMgr)
 	defer llmMgr.Close()
+	
+	// Set load options with device
+	loadOpts := llm.DefaultLoadOptions()
+	loadOpts.Device = askDevice
+	llmMgr.SetLoadOptions(loadOpts)
 	
 	if err := llmMgr.LoadModel(selectedModel.ID); err != nil {
 		return fmt.Errorf("failed to load model: %w", err)

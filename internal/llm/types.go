@@ -24,12 +24,13 @@ type GenerateOptions struct {
 
 // LoadOptions configures model loading
 type LoadOptions struct {
-	ContextSize int  // Max context tokens
-	Threads     int  // CPU threads for inference
-	BatchSize   int  // Batch size for prompt processing
-	UseMMap     bool // Use memory-mapped files
-	UseMlock    bool // Lock pages in RAM
-	Verbose     bool // Enable verbose logging
+	ContextSize int    // Max context tokens
+	Threads     int    // CPU threads for inference
+	BatchSize   int    // Batch size for prompt processing
+	UseMMap     bool   // Use memory-mapped files
+	UseMlock    bool   // Lock pages in RAM
+	Verbose     bool   // Enable verbose logging
+	Device      string // Device to use: "cpu", "gpu", or "auto"
 }
 
 // LlamaEngine wraps the underlying LLM engine

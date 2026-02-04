@@ -475,3 +475,25 @@ func (a *Attention) ClearCache() {
 	a.vCache = nil
 	a.cacheLen = 0
 }
+
+// MoveToDevice moves attention weights to the specified device
+func (a *Attention) MoveToDevice(device tensor.Device) error {
+	// Move Q, K, V, O weights to device
+	weights := []*tensor.Tensor{a.wq, a.wk, a.wv, a.wo}
+	ptrs := []*(*tensor.Tensor){&a.wq, &a.wk, &a.wv, &a.wo}
+	names := []string{"wq", "wk", "wv", "wo"}
+
+	for i, w := range weights {
+		if w == nil {
+			continue
+		}
+		gpuWeight, err := w.ToDevice(device)
+		if err != nil {
+			return fmt.Errorf("failed to move %s to device: %w", names[i], err)
+		}
+		w.FreeGPU() // Free old GPU memory if any
+		*ptrs[i] = gpuWeight
+	}
+
+	return nil
+}

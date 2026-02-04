@@ -77,3 +77,10 @@ func (r *RMSNorm) Forward(x *tensor.Tensor) (*tensor.Tensor, error) {
 
 	return output, nil
 }
+
+// MoveToDevice moves RMSNorm weight to the specified device
+func (r *RMSNorm) MoveToDevice(device tensor.Device) error {
+	// RMSNorm uses element-wise operations, keep weight on CPU for now
+	// GPU RMSNorm can be added later for full GPU acceleration
+	return nil
+}

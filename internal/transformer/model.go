@@ -93,6 +93,38 @@ func NewModel(ggufFile *gguf.GGUFFile) (*Model, error) {
 	}, nil
 }
 
+// MoveToDevice moves all model weights to the specified device (CPU or GPU)
+func (m *Model) MoveToDevice(device tensor.Device) error {
+	// Move embeddings
+	if err := m.embeddings.MoveToDevice(device); err != nil {
+		return fmt.Errorf("failed to move embeddings to device: %w", err)
+	}
+
+	// Move all layers
+	for i, layer := range m.layers {
+		if err := layer.MoveToDevice(device); err != nil {
+			return fmt.Errorf("failed to move layer %d to device: %w", i, err)
+		}
+	}
+
+	// Move output norm
+	if err := m.outputNorm.MoveToDevice(device); err != nil {
+		return fmt.Errorf("failed to move output norm to device: %w", err)
+	}
+
+	// Move output weight
+	if m.outputWeight != nil {
+		gpuWeight, err := m.outputWeight.ToDevice(device)
+		if err != nil {
+			return fmt.Errorf("failed to move output weight to device: %w", err)
+		}
+		m.outputWeight.FreeGPU() // Free old GPU memory if any
+		m.outputWeight = gpuWeight
+	}
+
+	return nil
+}
+
 // Forward performs a forward pass through the entire model
 // Input: token IDs [batch_size, seq_len]
 // Output: logits [batch_size, seq_len, vocab_size]

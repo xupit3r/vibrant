@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xupit3r/vibrant/internal/inference"
+	"github.com/xupit3r/vibrant/internal/tensor"
 )
 
 // CustomEngine implements the Engine interface using our custom pure Go inference engine
@@ -15,6 +16,20 @@ type CustomEngine struct {
 
 // NewCustomEngine creates a new custom inference engine from a GGUF model file
 func NewCustomEngine(modelPath string, opts LoadOptions) (*CustomEngine, error) {
+	// Parse device option
+	var device tensor.Device
+	switch opts.Device {
+	case "gpu":
+		device = tensor.GPU
+	case "cpu":
+		device = tensor.CPU
+	case "auto":
+		// Auto: try GPU first, fall back to CPU
+		device = tensor.GPU
+	default:
+		device = tensor.CPU
+	}
+
 	// Convert LoadOptions to inference.Config
 	config := &inference.Config{
 		MaxTokens:   opts.ContextSize / 2, // Reserve half for prompt
@@ -23,6 +38,7 @@ func NewCustomEngine(modelPath string, opts LoadOptions) (*CustomEngine, error) 
 		TopK:        40,
 		StopTokens:  []int{}, // Will be populated from tokenizer's EOS
 		Seed:        42,      // Deterministic by default
+		Device:      device,
 	}
 
 	// Create inference engine

@@ -140,6 +140,14 @@ func (e *Embeddings) Forward(tokenIDs [][]int) (*tensor.Tensor, error) {
 	return output, nil
 }
 
+// MoveToDevice moves embeddings to the specified device
+// Note: Embeddings stay on CPU because lookup is more efficient there
+func (e *Embeddings) MoveToDevice(device tensor.Device) error {
+	// Embeddings perform lookups, not matmul, so keep them on CPU
+	// GPU lookups would be slower due to random access patterns
+	return nil
+}
+
 // Embed is a convenience method for single sequence
 // Input: token IDs [seq_len]
 // Output: embeddings [1, seq_len, hidden_dim]

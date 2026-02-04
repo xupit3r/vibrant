@@ -117,3 +117,27 @@ func addTensors(a, b *tensor.Tensor) *tensor.Tensor {
 func (l *TransformerLayer) ClearCache() {
 	l.attn.ClearCache()
 }
+
+// MoveToDevice moves layer weights to the specified device
+func (l *TransformerLayer) MoveToDevice(device tensor.Device) error {
+	// Move attention weights
+	if err := l.attn.MoveToDevice(device); err != nil {
+		return fmt.Errorf("failed to move attention to device: %w", err)
+	}
+
+	// Move feedforward weights
+	if err := l.ffn.MoveToDevice(device); err != nil {
+		return fmt.Errorf("failed to move FFN to device: %w", err)
+	}
+
+	// Move normalization weights
+	if err := l.attnNorm.MoveToDevice(device); err != nil {
+		return fmt.Errorf("failed to move attn norm to device: %w", err)
+	}
+
+	if err := l.ffnNorm.MoveToDevice(device); err != nil {
+		return fmt.Errorf("failed to move ffn norm to device: %w", err)
+	}
+
+	return nil
+}

@@ -105,3 +105,25 @@ func (f *FeedForward) Forward(x *tensor.Tensor) (*tensor.Tensor, error) {
 
 	return output, nil
 }
+
+// MoveToDevice moves feedforward weights to the specified device
+func (f *FeedForward) MoveToDevice(device tensor.Device) error {
+	// Move gate, up, down weights to device
+	weights := []*tensor.Tensor{f.gate, f.up, f.down}
+	ptrs := []*(*tensor.Tensor){&f.gate, &f.up, &f.down}
+	names := []string{"gate", "up", "down"}
+
+	for i, w := range weights {
+		if w == nil {
+			continue
+		}
+		gpuWeight, err := w.ToDevice(device)
+		if err != nil {
+			return fmt.Errorf("failed to move %s to device: %w", names[i], err)
+		}
+		w.FreeGPU() // Free old GPU memory if any
+		*ptrs[i] = gpuWeight
+	}
+
+	return nil
+}

@@ -20,12 +20,13 @@ type Engine struct {
 
 // Config holds inference configuration parameters
 type Config struct {
-	MaxTokens   int      // Maximum number of tokens to generate
-	Temperature float32  // Sampling temperature (0 = greedy, >1 = more random)
-	TopP        float32  // Top-P (nucleus) sampling threshold
-	TopK        int      // Top-K sampling (0 = disabled)
-	StopTokens  []int    // Token IDs that stop generation
-	Seed        int64    // Random seed for sampling
+	MaxTokens   int            // Maximum number of tokens to generate
+	Temperature float32        // Sampling temperature (0 = greedy, >1 = more random)
+	TopP        float32        // Top-P (nucleus) sampling threshold
+	TopK        int            // Top-K sampling (0 = disabled)
+	StopTokens  []int          // Token IDs that stop generation
+	Seed        int64          // Random seed for sampling
+	Device      tensor.Device  // Device to run inference on (CPU, GPU, or Auto)
 }
 
 // GenerateOptions specifies per-generation configuration
@@ -52,6 +53,17 @@ func NewEngine(ggufPath string, config *Config) (*Engine, error) {
 	tok, err := tokenizer.NewTokenizerFromGGUF(ggufFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load tokenizer: %w", err)
+	}
+
+	// Move model to device if requested
+	if config.Device == tensor.GPU {
+		fmt.Println("Moving model weights to GPU...")
+		if err := model.MoveToDevice(tensor.GPU); err != nil {
+			fmt.Printf("Warning: Failed to move model to GPU: %v\n", err)
+			fmt.Println("Falling back to CPU")
+		} else {
+			fmt.Println("Model loaded on GPU")
+		}
 	}
 
 	// Create sampler
