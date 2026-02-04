@@ -2,10 +2,53 @@ package integration
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// TestMain builds the binary before running integration tests
+func TestMain(m *testing.M) {
+	// Get the absolute path to project root
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get working directory: %v\n", err)
+		os.Exit(1)
+	}
+	
+	// Navigate up two directories from test/integration to project root
+	projectRoot := filepath.Join(cwd, "..", "..")
+	binaryPath := filepath.Join(projectRoot, "vibrant")
+	
+	fmt.Printf("Building vibrant binary at: %s\n", binaryPath)
+	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/vibrant")
+	cmd.Dir = projectRoot
+	
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to build vibrant: %v\nOutput: %s\n", err, output)
+		os.Exit(1)
+	}
+	
+	// Verify binary was created
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Binary was not created at: %s\n", binaryPath)
+		os.Exit(1)
+	}
+	
+	fmt.Printf("Successfully built vibrant binary\n")
+	
+	// Run tests
+	code := m.Run()
+	
+	// Cleanup: remove the binary
+	os.Remove(binaryPath)
+	
+	os.Exit(code)
+}
 
 // TestShellCompletionGeneration tests that completion scripts can be generated
 func TestShellCompletionGeneration(t *testing.T) {
@@ -55,7 +98,9 @@ func TestShellCompletionGeneration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("./vibrant", "completion", tt.shell)
+			// Use the binary from project root
+			binaryPath := filepath.Join("..", "..", "vibrant")
+			cmd := exec.Command(binaryPath, "completion", tt.shell)
 			
 			var stdout, stderr bytes.Buffer
 			cmd.Stdout = &stdout
@@ -90,7 +135,8 @@ func TestCompletionSubcommands(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	cmd := exec.Command("./vibrant", "completion", "bash")
+	binaryPath := filepath.Join("..", "..", "vibrant")
+	cmd := exec.Command(binaryPath, "completion", "bash")
 	
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -124,7 +170,8 @@ func TestCompletionModelSubcommands(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	cmd := exec.Command("./vibrant", "completion", "bash")
+	binaryPath := filepath.Join("..", "..", "vibrant")
+	cmd := exec.Command(binaryPath, "completion", "bash")
 	
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -151,13 +198,14 @@ func TestCompletionModelSubcommands(t *testing.T) {
 	}
 }
 
-// TestCompletionFlags verifies common flags are in completion
+// TestCompletionFlags verifies that common flags are included
 func TestCompletionFlags(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	cmd := exec.Command("./vibrant", "completion", "bash")
+	binaryPath := filepath.Join("..", "..", "vibrant")
+	cmd := exec.Command(binaryPath, "completion", "bash")
 	
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -215,7 +263,8 @@ func TestCompletionErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("./vibrant", tt.args...)
+			binaryPath := filepath.Join("..", "..", "vibrant")
+			cmd := exec.Command(binaryPath, tt.args...)
 			
 			var stderr bytes.Buffer
 			cmd.Stderr = &stderr
@@ -239,7 +288,8 @@ func TestCompletionHelpText(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	cmd := exec.Command("./vibrant", "completion", "--help")
+	binaryPath := filepath.Join("..", "..", "vibrant")
+	cmd := exec.Command(binaryPath, "completion", "--help")
 	
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
