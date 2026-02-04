@@ -35,6 +35,14 @@ build-custom: ## Build with custom pure Go engine (same as default build)
 	@$(CGO_FLAGS_CUSTOM) go build $(BUILD_TAGS_CUSTOM) $(LDFLAGS) -o $(BINARY_NAME) $(CMD_DIR)
 	@echo "✅ Build complete: ./$(BINARY_NAME) (pure Go)"
 
+build-gpu: ## Build with GPU support (requires macOS and CGO for Metal)
+	@echo "Building $(BINARY_NAME) with GPU support (Metal)..."
+	@CGO_ENABLED=1 go build $(LDFLAGS) -o $(BINARY_NAME) $(CMD_DIR)
+	@echo "✅ Build complete: ./$(BINARY_NAME) (with Metal GPU support)"
+	@echo ""
+	@echo "💡 This build includes Metal GPU acceleration for Apple Silicon"
+	@echo "   Use --device gpu flag to enable GPU acceleration"
+
 build-llama: ## Build with llama.cpp inference (requires C++ compiler and CGO)
 	@echo "Building $(BINARY_NAME) with llama.cpp..."
 	@$(CGO_FLAGS_LLAMA) go build $(BUILD_TAGS_LLAMA) $(LDFLAGS) -o $(BINARY_NAME) $(CMD_DIR)

@@ -268,20 +268,25 @@ make test
 
 ### Build Options
 
-By default, `make build` **attempts to build with llama.cpp** for real LLM inference. If llama.cpp dependencies aren't available, it automatically falls back to a mock engine.
+By default, `make build` uses the **pure Go inference engine** (no CGO required). This works on all platforms and includes CPU-only support.
 
 ```bash
-# Default: tries llama.cpp, falls back to mock
+# Default: Pure Go engine (no dependencies, CPU only)
 make build
 
-# Force llama.cpp (fails if dependencies missing)
+# With GPU support: Requires macOS and CGO for Metal
+make build-gpu
+
+# With llama.cpp (requires manual setup)
 make build-llama
 
-# Force mock engine (for development/testing)
+# Mock engine (for development/testing)
 make build-mock
 ```
 
-See [docs/llama-setup.md](docs/llama-setup.md) for detailed setup instructions.
+**GPU Support (macOS only)**: GPU acceleration requires CGO to be enabled for Metal framework integration. Use `make build-gpu` to build with GPU support on Apple Silicon.
+
+See [docs/llama-setup.md](docs/llama-setup.md) for llama.cpp setup instructions.
 
 ## Architecture
 

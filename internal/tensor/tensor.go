@@ -9,7 +9,6 @@ import (
 	"unsafe"
 
 	"github.com/xupit3r/vibrant/internal/gpu"
-	"github.com/xupit3r/vibrant/internal/gpu/metal"
 )
 
 // DataType represents the data type of tensor elements
@@ -102,9 +101,9 @@ type Tensor struct {
 	cacheGen     uint64  // LRU generation counter
 
 	// GPU support
-	gpuBuffer  gpu.Buffer      // GPU buffer if tensor is on GPU
-	gpuDevice  gpu.Device      // GPU device reference
-	gpuKernels *metal.KernelSet // Compiled Metal kernels (shared across tensors on same device)
+	gpuBuffer  gpu.Buffer // GPU buffer if tensor is on GPU
+	gpuDevice  gpu.Device // GPU device reference
+	gpuKernels interface{} // Compiled GPU kernels (platform-specific, e.g., *metal.KernelSet)
 }
 
 // NewTensor creates a new tensor with the given shape and data type

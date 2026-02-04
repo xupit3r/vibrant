@@ -1,3 +1,5 @@
+// +build darwin,cgo
+
 package tensor
 
 import (
@@ -46,7 +48,8 @@ func matmulGPU(a, b *Tensor) *Tensor {
 	// Use single-row optimization for M=1 (decode step)
 	singleRow := M == 1
 
-	err = a.gpuKernels.DispatchMatMul(queuePtr, metal.MatMulParams{
+	kernels := a.gpuKernels.(*metal.KernelSet)
+	err = kernels.DispatchMatMul(queuePtr, metal.MatMulParams{
 		A:         a.gpuBuffer.MetalBuffer(),
 		B:         b.gpuBuffer.MetalBuffer(),
 		C:         outputBuf.MetalBuffer(),
@@ -112,7 +115,8 @@ func softmaxGPU(input *Tensor) *Tensor {
 	queuePtr := getMetalQueuePtr(metalDev)
 
 	// Dispatch kernel
-	err = input.gpuKernels.DispatchSoftmax(queuePtr, metal.SoftmaxParams{
+	kernels := input.gpuKernels.(*metal.KernelSet)
+	err = kernels.DispatchSoftmax(queuePtr, metal.SoftmaxParams{
 		Input:  input.gpuBuffer.MetalBuffer(),
 		Output: outputBuf.MetalBuffer(),
 		Size:   uint32(size),
@@ -172,7 +176,8 @@ func rmsNormGPU(input, weight *Tensor, eps float32) *Tensor {
 	queuePtr := getMetalQueuePtr(metalDev)
 
 	// Dispatch kernel
-	err = input.gpuKernels.DispatchRMSNorm(queuePtr, metal.RMSNormParams{
+	kernels := input.gpuKernels.(*metal.KernelSet)
+	err = kernels.DispatchRMSNorm(queuePtr, metal.RMSNormParams{
 		Input:   input.gpuBuffer.MetalBuffer(),
 		Weight:  weight.gpuBuffer.MetalBuffer(),
 		Output:  outputBuf.MetalBuffer(),
@@ -230,7 +235,8 @@ func addGPU(a, b *Tensor) *Tensor {
 	queuePtr := getMetalQueuePtr(metalDev)
 
 	// Dispatch kernel
-	err = a.gpuKernels.DispatchAdd(queuePtr, metal.ElementwiseParams{
+	kernels := a.gpuKernels.(*metal.KernelSet)
+	err = kernels.DispatchAdd(queuePtr, metal.ElementwiseParams{
 		A:    a.gpuBuffer.MetalBuffer(),
 		B:    b.gpuBuffer.MetalBuffer(),
 		C:    outputBuf.MetalBuffer(),
@@ -285,7 +291,8 @@ func mulGPU(a, b *Tensor) *Tensor {
 	queuePtr := getMetalQueuePtr(metalDev)
 
 	// Dispatch kernel
-	err = a.gpuKernels.DispatchMul(queuePtr, metal.ElementwiseParams{
+	kernels := a.gpuKernels.(*metal.KernelSet)
+	err = kernels.DispatchMul(queuePtr, metal.ElementwiseParams{
 		A:    a.gpuBuffer.MetalBuffer(),
 		B:    b.gpuBuffer.MetalBuffer(),
 		C:    outputBuf.MetalBuffer(),
