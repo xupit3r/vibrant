@@ -619,9 +619,81 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 - [ ] Flash Attention implementation
 - [ ] SIMD dequantization (3-4x throughput)
 - [ ] Quantized KV-cache
-- [ ] Speculative decoding
 
 **Deliverable**: Production-ready performance (5-10 tokens/sec) ⏳
+
+## Phase 11: GPU Acceleration & Offloading 🔮 PLANNED
+
+### Vision
+Enable Vibrant to leverage GPU compute and run models larger than available memory through intelligent offloading, based on research from the SpecExec paper (NeurIPS 2024).
+
+### Phase 11.1: GPU Backend Foundation ⏳
+- [ ] Device abstraction layer (`internal/gpu/device.go`)
+- [ ] Metal backend for Apple Silicon
+- [ ] Basic GPU kernels (matmul, softmax, layer norm)
+- [ ] Memory management and host ↔ GPU transfers
+- [ ] Tensor device integration
+
+**Deliverable**: GPU-accelerated inference on Apple Silicon
+
+### Phase 11.2: RAM Offloading ⏳
+- [ ] Offload manager (`internal/offload/manager.go`)
+- [ ] Layer location tracking (GPU/RAM/Disk)
+- [ ] Async prefetching with double buffering
+- [ ] Memory pressure handling
+- [ ] Transformer integration
+
+**Deliverable**: Run 70B+ models on 16GB RAM systems
+
+## Phase 12: Speculative Decoding (SpecExec) 🔮 PLANNED
+
+### Vision
+Implement SpecExec algorithm for 10-50x inference speedup by using a small draft model to predict likely continuations, validated in a single target model pass.
+
+### Phase 12.1: Draft Tree Builder ⏳
+- [ ] Draft tree data structures
+- [ ] Dijkstra-based tree construction (Algorithm 2 from paper)
+- [ ] Priority queue for cumulative log-probability
+- [ ] Top-K token selection per node
+
+**Deliverable**: Optimal draft tree construction in O(K log K)
+
+### Phase 12.2: Speculative Cache ⏳
+- [ ] LRU cache for target model probabilities
+- [ ] Prefix hashing scheme
+- [ ] Memory-bounded eviction
+- [ ] Cache statistics
+
+**Deliverable**: Efficient caching of speculated continuations
+
+### Phase 12.3: Verification & Integration ⏳
+- [ ] Batch target model forward pass on draft tree
+- [ ] Token acceptance logic (Algorithm 1)
+- [ ] Dual model management (draft + target)
+- [ ] SpecExec engine wrapper
+
+**Deliverable**: Complete SpecExec pipeline
+
+### Phase 12.4: CLI & Configuration ⏳
+- [ ] `--speculative` flag for ask/chat commands
+- [ ] `--draft-model` flag for draft model selection
+- [ ] `--offload` flag for RAM offloading
+- [ ] Auto-tuning for optimal parameters (K, D, B)
+- [ ] Configuration file support
+
+**Deliverable**: User-friendly speculative decoding
+
+### Expected Performance (from SpecExec Paper)
+
+| Setup | Gen Rate | Speed | Speedup |
+|-------|----------|-------|---------|
+| 7B draft / 70B target (offload) | 20.6 tok/step | 3.1 tok/s | 18.7x |
+| 7B / 70B GPTQ (4-bit) | 12.1 tok/step | 6.0 tok/s | 8.9x |
+| 8B / 70B (offload) | 18.9 tok/step | 2.6 tok/s | 15.6x |
+
+### Technical Reference
+- [specs/speculative-decoding.md](./specs/speculative-decoding.md) - Full technical specification
+- [papers/2024-specexec.pdf](./papers/2024-specexec.pdf) - SpecExec NeurIPS 2024 paper
 
 ### Project Structure (New Packages)
 ```
@@ -710,9 +782,36 @@ make build-llama   # Uses go-llama.cpp
 3. **CI/CD**: Automated benchmarking from day one?
 4. **Migration**: Keep llama.cpp build indefinitely or deprecate?
 
+### Project Structure (Phase 11-12 Additions)
+```
+internal/
+├── gpu/              # NEW: GPU acceleration
+│   ├── device.go            # Device abstraction
+│   ├── metal/               # Apple Metal backend
+│   │   ├── compute.go
+│   │   └── kernels.metal
+│   └── cuda/                # NVIDIA CUDA (future)
+│
+├── offload/          # NEW: RAM/disk offloading
+│   ├── manager.go           # Offload orchestration
+│   ├── prefetcher.go        # Async layer loading
+│   └── scheduler.go         # Layer placement
+│
+├── speculative/      # NEW: Speculative decoding
+│   ├── tree.go              # Draft tree structures
+│   ├── builder.go           # Dijkstra tree construction
+│   ├── cache.go             # Speculative cache
+│   └── verify.go            # Token verification
+│
+└── inference/        # MODIFIED
+    ├── engine_spec.go       # NEW: SpecExec engine
+    └── dual_model.go        # NEW: Draft + target mgmt
+```
+
 ## See Also
 
 - [Phase 9 Detailed Plan](./docs/phases/PHASE9_SUMMARY.md)
 - [Custom Engine Spec](./specs/custom-inference.md)
 - [Tensor Library Spec](./specs/tensor-system.md)
 - [GGUF Format Spec](./specs/gguf-format.md)
+- [Speculative Decoding Spec](./specs/speculative-decoding.md)
