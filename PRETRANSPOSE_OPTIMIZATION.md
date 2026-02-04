@@ -187,15 +187,37 @@ Created comprehensive test suite:
 - **Runtime cost**: Simple flag check in `GetOrDequantTranspose()`
 
 ### Expected Speedup
-**~4x faster** for the transpose operation itself:
-- Before: Transpose happens 196 times per forward pass
+**Target: ~4x faster** for the transpose operation itself:
+- Before: Transpose happens 197 times per forward pass
 - After: Transpose happens 0 times per forward pass (just flag checks)
+
+### Actual Speedup (Measured)
+**Achieved: ~1.4-1.5x speedup** (not the expected 4x)
+
+**Root Cause**: Cache thrashing limits the optimization impact
+- Default cache: 8GB capacity
+- Qwen 14B model: ~26GB of dequantized weights needed
+- LRU eviction causes constant re-dequantization and re-transposition
+- Each evicted weight must be dequantized and transposed again on next access
+
+**Why the Gap**:
+- Pre-transpose eliminates 197 transpose operations **IF** weights stay cached
+- With cache thrashing, weights are evicted and re-dequantized constantly
+- Transpose happens during dequantization from the cache's perspective
+- Net result: Still doing many transposes, just not as many as before
+
+**Path to 4x Speedup**:
+- Need layer-aware LRU eviction (keep full layer weights together)
+- OR increase cache size to 32GB to hold all weights
+- OR implement smarter cache management (predict access patterns)
+- See Phase 10.11 in PLAN.md for optimization roadmap
 
 ### Quantized Weights
 For quantized weights (Q4_K, Q5_K, Q6_K):
 - Transpose still happens after dequantization (via weight cache)
-- Cache ensures it only happens once per weight matrix (not per forward pass)
+- Cache ensures it only happens once per weight matrix (when eviction doesn't occur)
 - Pre-transpose optimization complements the existing cache system
+- Cache thrashing significantly impacts performance
 
 ## Files Modified
 
