@@ -156,11 +156,10 @@ func NewMetalDevice() (*MetalDevice, error) {
 		buffers: make(map[uintptr]*metalBuffer),
 	}
 
-	// Buffer pool disabled for now - causes deadlock issues with wrapper pattern
-	// TODO: Implement simpler pool without buffer wrapping
-	// maxWorkingSet := int64(C.getRecommendedMaxWorkingSetSize(ctx.device))
-	// poolMaxBytes := (maxWorkingSet * 8) / 10
-	// dev.pool = NewBufferPool(dev, poolMaxBytes)
+	// Initialize buffer pool for efficient allocation reuse
+	maxWorkingSet := int64(C.getRecommendedMaxWorkingSetSize(ctx.device))
+	poolMaxBytes := (maxWorkingSet * 8) / 10
+	dev.pool = NewBufferPool(dev, poolMaxBytes)
 
 	return dev, nil
 }
@@ -178,8 +177,17 @@ func (d *MetalDevice) Allocate(size int64) (Buffer, error) {
 		return nil, fmt.Errorf("invalid buffer size: %d", size)
 	}
 
-	// Buffer pool disabled for now due to wrapper complexity
-	// Use direct allocation
+	// Use pool if available
+	if d.pool != nil {
+		return d.pool.Allocate(size)
+	}
+
+	// Direct allocation (fallback if no pool)
+	return d.allocateDirect(size)
+}
+
+// allocateDirect performs direct buffer allocation without pooling
+func (d *MetalDevice) allocateDirect(size int64) (Buffer, error) {
 	bufPtr := C.allocateBuffer(d.ctx.device, C.size_t(size))
 	if bufPtr == nil {
 		return nil, fmt.Errorf("failed to allocate Metal buffer of size %d", size)
@@ -199,11 +207,21 @@ func (d *MetalDevice) Allocate(size int64) (Buffer, error) {
 }
 
 func (d *MetalDevice) Copy(dst, src Buffer, size int64) error {
-	dstBuf, ok := dst.(*metalBuffer)
+	// Unwrap pooled buffers if necessary
+	dstUnwrapped := dst
+	if pooled, ok := dst.(*pooledBuffer); ok {
+		dstUnwrapped = pooled.Buffer
+	}
+	srcUnwrapped := src
+	if pooled, ok := src.(*pooledBuffer); ok {
+		srcUnwrapped = pooled.Buffer
+	}
+
+	dstBuf, ok := dstUnwrapped.(*metalBuffer)
 	if !ok {
 		return fmt.Errorf("dst is not a Metal buffer")
 	}
-	srcBuf, ok := src.(*metalBuffer)
+	srcBuf, ok := srcUnwrapped.(*metalBuffer)
 	if !ok {
 		return fmt.Errorf("src is not a Metal buffer")
 	}
@@ -235,15 +253,15 @@ func (d *MetalDevice) Sync() error {
 }
 
 func (d *MetalDevice) Free() error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	// Clear buffer pool first
+	// Clear buffer pool first (before acquiring lock to avoid deadlock)
 	if d.pool != nil {
 		d.pool.Clear()
 	}
 
-	// Free all buffers
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	// Free all remaining buffers
 	for _, buf := range d.buffers {
 		if buf.ptr != nil {
 			C.freeBuffer(buf.ptr)

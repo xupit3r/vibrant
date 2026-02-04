@@ -31,10 +31,12 @@ type PoolStats struct {
 // pooledBuffer wraps a buffer with reference counting
 type pooledBuffer struct {
 	Buffer
-	size    int64
-	refCount int32
-	pool    *BufferPool
-	inUse   bool
+	requestedSize int64 // Size requested by user
+	actualSize    int64 // Actual allocation size
+	poolKey       int64 // Key used for pool storage (rounded for reuse)
+	refCount      int32
+	pool          *BufferPool
+	inUse         bool
 }
 
 // NewBufferPool creates a new buffer pool
@@ -55,45 +57,61 @@ func (p *BufferPool) Allocate(size int64) (Buffer, error) {
 
 	p.stats.Allocations++
 
-	// Round size up to nearest power of 2 for better reuse
+	// Look for available buffer in pool that's big enough
+	// Check power-of-2 sizes from requested size up
 	poolSize := roundUpPowerOf2(size)
-
-	// Look for available buffer in pool
-	if buffers, ok := p.pools[poolSize]; ok && len(buffers) > 0 {
-		// Reuse buffer from pool
-		buf := buffers[len(buffers)-1]
-		p.pools[poolSize] = buffers[:len(buffers)-1]
-		
-		buf.inUse = true
-		buf.refCount = 1
-		p.active[buf.Ptr()] = buf
-		
-		p.curBytes -= poolSize
-		p.stats.Reuses++
-		p.stats.PoolHits++
-		
-		return buf, nil
+	for checkSize := poolSize; checkSize <= poolSize*2; checkSize *= 2 {
+		if buffers, ok := p.pools[checkSize]; ok && len(buffers) > 0 {
+			// Reuse buffer from pool
+			buf := buffers[len(buffers)-1]
+			p.pools[checkSize] = buffers[:len(buffers)-1]
+			
+			buf.inUse = true
+			buf.refCount = 1
+			buf.requestedSize = size // Update requested size for reused buffer
+			buf.poolKey = poolSize    // Update pool key
+			p.active[buf.Ptr()] = buf
+			
+			p.curBytes -= buf.actualSize
+			p.stats.Reuses++
+			p.stats.PoolHits++
+			
+			return buf, nil
+		}
 	}
 
 	p.stats.PoolMisses++
 
-	// Allocate new buffer
-	rawBuf, err := p.device.Allocate(poolSize)
+	// Allocate new buffer at exact requested size (no rounding)
+	// This keeps the interface clean - buffer.Size() returns what was requested
+	rawBuf, err := p.allocateDirect(size)
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate GPU buffer: %w", err)
 	}
 
+	// Use rounded size as pool key for better reuse (reuse poolSize from above)
 	poolBuf := &pooledBuffer{
-		Buffer:   rawBuf,
-		size:     poolSize,
-		refCount: 1,
-		pool:     p,
-		inUse:    true,
+		Buffer:        rawBuf,
+		requestedSize: size,
+		actualSize:    size,
+		poolKey:       poolSize, // Store with rounded key for reuse
+		refCount:      1,
+		pool:          p,
+		inUse:         true,
 	}
 
 	p.active[rawBuf.Ptr()] = poolBuf
 
 	return poolBuf, nil
+}
+
+// allocateDirect calls the device's direct allocation method
+func (p *BufferPool) allocateDirect(size int64) (Buffer, error) {
+	if metalDev, ok := p.device.(*MetalDevice); ok {
+		return metalDev.allocateDirect(size)
+	}
+	// For other device types, just call Allocate
+	return p.device.Allocate(size)
 }
 
 // Release returns a buffer to the pool
@@ -126,14 +144,14 @@ func (p *BufferPool) Release(buf Buffer) error {
 	tracked.inUse = false
 
 	// Check if we have space in pool
-	if p.maxBytes > 0 && p.curBytes+tracked.size > p.maxBytes {
+	if p.maxBytes > 0 && p.curBytes+tracked.actualSize > p.maxBytes {
 		// Pool is full, evict oldest buffer
 		p.evictOldest()
 	}
 
-	// Add to pool
-	p.pools[tracked.size] = append(p.pools[tracked.size], tracked)
-	p.curBytes += tracked.size
+	// Add to pool using poolKey (rounded size) for better reuse
+	p.pools[tracked.poolKey] = append(p.pools[tracked.poolKey], tracked)
+	p.curBytes += tracked.actualSize
 
 	return nil
 }
@@ -192,7 +210,7 @@ func (p *BufferPool) MemoryUsage() (pooled, active, max int64) {
 
 	activeBytes := int64(0)
 	for _, buf := range p.active {
-		activeBytes += buf.size
+		activeBytes += buf.actualSize
 	}
 
 	return p.curBytes, activeBytes, p.maxBytes
@@ -230,7 +248,8 @@ func roundUpPowerOf2(n int64) int64 {
 // pooledBuffer methods that delegate to underlying buffer
 
 func (b *pooledBuffer) Size() int64 {
-	return b.Buffer.Size()
+	// Return requested size, not actual allocation size
+	return b.requestedSize
 }
 
 func (b *pooledBuffer) Ptr() uintptr {

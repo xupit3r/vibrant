@@ -73,19 +73,35 @@ func TestBufferPoolSizeRounding(t *testing.T) {
 	pool := NewBufferPool(dev, 10*1024*1024)
 	defer pool.Clear()
 
-	// Allocate 100 bytes - should round up
+	// Allocate 100 bytes (rounds to 256 for pooling)
 	buf1, _ := pool.Allocate(100)
 	pool.Release(buf1)
 
-	// Allocate 200 bytes - should reuse rounded buffer
-	buf2, _ := pool.Allocate(200)
+	// Allocate exact same size - should reuse
+	buf2, _ := pool.Allocate(100)
 	
 	stats := pool.Stats()
 	if stats.Reuses != 1 {
-		t.Errorf("Expected buffer reuse due to size rounding, got %d reuses", stats.Reuses)
+		t.Errorf("Expected buffer reuse for exact size match, got %d reuses", stats.Reuses)
 	}
 
 	pool.Release(buf2)
+	
+	// Allocate 200 bytes - rounds to same 256, should reuse!
+	buf3, _ := pool.Allocate(200)
+	stats = pool.Stats()
+	if stats.Reuses != 2 {
+		t.Errorf("Expected 2 reuses (both round to 256), got %d", stats.Reuses)
+	}
+	pool.Release(buf3)
+	
+	// Allocate 1024 bytes - rounds to 1024, should NOT reuse
+	buf4, _ := pool.Allocate(1024)
+	stats = pool.Stats()
+	if stats.PoolMisses != 2 { // First allocation + this one
+		t.Errorf("Expected 2 pool misses, got %d", stats.PoolMisses)
+	}
+	pool.Release(buf4)
 }
 
 func TestBufferPoolEviction(t *testing.T) {
