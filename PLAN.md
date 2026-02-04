@@ -10,16 +10,24 @@ Create a standalone CLI-based code assistant called **Vibrant** that:
 
 ## Documentation Organization
 
-**IMPORTANT**: All progress summaries, phase results, roadmaps, profiling reports, and implementation notes should be placed in the `docs/` directory, NOT in the project root. The root should only contain `PLAN.md` and `README.md`.
+**CRITICAL RULE FOR ALL FUTURE AGENTS**: Keep the repository root clean! Only `README.md` and `PLAN.md` are allowed in the root directory. All other markdown files MUST go in `docs/` or `specs/` subdirectories.
+
+### Root Directory (Markdown Files)
+- ✅ `README.md` - User-facing documentation only
+- ✅ `PLAN.md` - Implementation roadmap only
+- ❌ **NO other markdown files in root!**
 
 ### Documentation Directory Structure
 ```
 docs/
-├── phases/          # Phase summaries (PHASE*.md files)
+├── phases/          # Phase summaries (PHASE*_SUMMARY.md)
 ├── plans/           # Strategic planning documents and roadmaps
 ├── results/         # Test results, profiling data, benchmarks
 ├── implementation/  # Implementation notes and technical details
 └── setup/          # Setup guides and user documentation
+
+specs/
+└── *.md            # Technical specifications and API documentation
 ```
 
 ### File Placement Guidelines
@@ -28,8 +36,17 @@ docs/
 - **Test results/profiling**: `docs/results/` (e.g., END_TO_END_TEST_RESULTS.md, PROFILING_RESULTS.md)
 - **Implementation details**: `docs/implementation/` (e.g., Q6K_IMPLEMENTATION.md)
 - **Setup guides**: `docs/setup/` (e.g., llama-setup.md, shell-completion.md)
+- **Technical specs**: `specs/` (e.g., agent-behavior.md, gpu-backend.md)
 - **Project plan**: `PLAN.md` (root only)
 - **User-facing docs**: `README.md` (root only)
+
+### ⚠️ Important for AI Agents
+When creating documentation:
+1. **Never create markdown files in the root directory** except README.md and PLAN.md
+2. Always place new documentation in the appropriate `docs/` subdirectory
+3. If unsure, use `docs/implementation/` for technical notes
+4. Use `specs/` for API documentation and technical specifications
+5. Check this section before creating any markdown file
 
 ## Proposed Approach
 
