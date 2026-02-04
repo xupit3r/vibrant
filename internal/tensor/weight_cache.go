@@ -18,7 +18,7 @@ type WeightCacheManager struct {
 
 // DefaultWeightCache is the global weight cache instance
 var DefaultWeightCache = &WeightCacheManager{
-	budget:  8 * 1024 * 1024 * 1024, // 8GB default
+	budget:  32 * 1024 * 1024 * 1024, // 32GB default (increased from 8GB to fix cache thrashing)
 	used:    0,
 	entries: make(map[*Tensor]int64),
 }
