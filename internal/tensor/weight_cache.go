@@ -10,10 +10,13 @@ var globalCacheGen uint64
 
 // WeightCacheManager manages a memory-budgeted cache of dequantized weight tensors
 type WeightCacheManager struct {
-	mu      sync.Mutex
-	budget  int64             // Maximum bytes allowed for cache
-	used    int64             // Current bytes used
-	entries map[*Tensor]int64 // Tensor -> byte size of cached data
+	mu        sync.Mutex
+	budget    int64             // Maximum bytes allowed for cache
+	used      int64             // Current bytes used
+	entries   map[*Tensor]int64 // Tensor -> byte size of cached data
+	hits      uint64            // Cache hits (atomic)
+	misses    uint64            // Cache misses (atomic)
+	evictions uint64            // Number of evictions (atomic)
 }
 
 // DefaultWeightCache is the global weight cache instance
@@ -63,6 +66,7 @@ func (m *WeightCacheManager) evictLRU() {
 		delete(m.entries, oldestTensor)
 		m.used -= size
 		oldestTensor.dequantCache = nil
+		atomic.AddUint64(&m.evictions, 1)
 	}
 }
 
@@ -71,6 +75,50 @@ func (m *WeightCacheManager) Stats() (used, budget int64, entries int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.used, m.budget, len(m.entries)
+}
+
+// DetailedStats returns detailed cache statistics including hit/miss rates
+func (m *WeightCacheManager) DetailedStats() CacheStats {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	hits := atomic.LoadUint64(&m.hits)
+	misses := atomic.LoadUint64(&m.misses)
+	evictions := atomic.LoadUint64(&m.evictions)
+	
+	total := hits + misses
+	hitRate := float64(0)
+	if total > 0 {
+		hitRate = float64(hits) / float64(total) * 100
+	}
+	
+	return CacheStats{
+		UsedBytes:    m.used,
+		BudgetBytes:  m.budget,
+		Entries:      len(m.entries),
+		Hits:         hits,
+		Misses:       misses,
+		Evictions:    evictions,
+		HitRate:      hitRate,
+	}
+}
+
+// CacheStats holds detailed cache statistics
+type CacheStats struct {
+	UsedBytes    int64   // Current bytes used
+	BudgetBytes  int64   // Maximum bytes allowed
+	Entries      int     // Number of cached entries
+	Hits         uint64  // Cache hits
+	Misses       uint64  // Cache misses
+	Evictions    uint64  // Number of evictions
+	HitRate      float64 // Hit rate percentage
+}
+
+// ResetStats resets hit/miss/eviction counters
+func (m *WeightCacheManager) ResetStats() {
+	atomic.StoreUint64(&m.hits, 0)
+	atomic.StoreUint64(&m.misses, 0)
+	atomic.StoreUint64(&m.evictions, 0)
 }
 
 // nextCacheGen atomically increments and returns the next cache generation counter

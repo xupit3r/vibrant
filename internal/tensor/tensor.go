@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 
@@ -386,11 +387,15 @@ func (t *Tensor) GetOrDequantTranspose() *Tensor {
 		return t
 	}
 
-	// Return cached version if available
+	// Return cached version if available (cache hit)
 	if t.dequantCache != nil {
 		t.cacheGen = nextCacheGen()
+		atomic.AddUint64(&DefaultWeightCache.hits, 1)
 		return t.dequantCache
 	}
+
+	// Cache miss - need to dequantize and transpose
+	atomic.AddUint64(&DefaultWeightCache.misses, 1)
 
 	// Dequantize to Float32
 	dequant := dequantIfNeeded(t)
