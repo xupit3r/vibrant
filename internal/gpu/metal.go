@@ -136,6 +136,7 @@ type MetalDevice struct {
 	name    string
 	buffers map[uintptr]*metalBuffer
 	mu      sync.RWMutex
+	pool    *BufferPool // Buffer pool for efficient allocation
 }
 
 // NewMetalDevice creates a new Metal device
@@ -149,11 +150,19 @@ func NewMetalDevice() (*MetalDevice, error) {
 	name := C.GoString(namePtr)
 	C.free(unsafe.Pointer(namePtr))
 
-	return &MetalDevice{
+	dev := &MetalDevice{
 		ctx:     ctx,
 		name:    name,
 		buffers: make(map[uintptr]*metalBuffer),
-	}, nil
+	}
+
+	// Buffer pool disabled for now - causes deadlock issues with wrapper pattern
+	// TODO: Implement simpler pool without buffer wrapping
+	// maxWorkingSet := int64(C.getRecommendedMaxWorkingSetSize(ctx.device))
+	// poolMaxBytes := (maxWorkingSet * 8) / 10
+	// dev.pool = NewBufferPool(dev, poolMaxBytes)
+
+	return dev, nil
 }
 
 func (d *MetalDevice) Type() DeviceType {
@@ -169,6 +178,8 @@ func (d *MetalDevice) Allocate(size int64) (Buffer, error) {
 		return nil, fmt.Errorf("invalid buffer size: %d", size)
 	}
 
+	// Buffer pool disabled for now due to wrapper complexity
+	// Use direct allocation
 	bufPtr := C.allocateBuffer(d.ctx.device, C.size_t(size))
 	if bufPtr == nil {
 		return nil, fmt.Errorf("failed to allocate Metal buffer of size %d", size)
@@ -227,6 +238,11 @@ func (d *MetalDevice) Free() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	// Clear buffer pool first
+	if d.pool != nil {
+		d.pool.Clear()
+	}
+
 	// Free all buffers
 	for _, buf := range d.buffers {
 		if buf.ptr != nil {
@@ -254,6 +270,22 @@ func (d *MetalDevice) MemoryUsage() (int64, int64) {
 	total := int64(C.getRecommendedMaxWorkingSetSize(d.ctx.device))
 
 	return used, total
+}
+
+// PoolStats returns buffer pool statistics
+func (d *MetalDevice) PoolStats() PoolStats {
+	if d.pool != nil {
+		return d.pool.Stats()
+	}
+	return PoolStats{}
+}
+
+// PoolMemoryUsage returns buffer pool memory usage
+func (d *MetalDevice) PoolMemoryUsage() (pooled, active, max int64) {
+	if d.pool != nil {
+		return d.pool.MemoryUsage()
+	}
+	return 0, 0, 0
 }
 
 // metalBuffer implements Buffer for Metal GPU memory
