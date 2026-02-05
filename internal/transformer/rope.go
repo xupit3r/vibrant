@@ -1,6 +1,7 @@
 package transformer
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/xupit3r/vibrant/internal/tensor"
@@ -62,14 +63,27 @@ func (r *RoPE) ApplyRotation(x *tensor.Tensor, positions []int) (*tensor.Tensor,
 		if output != nil {
 			return output, nil
 		}
-		// Fall through to CPU if GPU fails
+		// Fall through to CPU if GPU fails - need to transfer to CPU first
 	}
 
-	// CPU fallback: Create output tensor on CPU
+	// CPU fallback
+	// If input is on GPU, transfer to CPU first
+	var xCPU *tensor.Tensor
+	if x.IsOnGPU() {
+		var err error
+		xCPU, err = x.ToDevice(tensor.CPU)
+		if err != nil {
+			return nil, fmt.Errorf("failed to transfer GPU tensor to CPU for RoPE: %w", err)
+		}
+	} else {
+		xCPU = x
+	}
+
+	// Create output tensor on CPU
 	output := tensor.NewTensor(shape, tensor.Float32)
 
 	// Direct slice access — no At()/Set() calls
-	xData := x.Data().([]float32)
+	xData := xCPU.Data().([]float32)  // Use xCPU instead of x
 	outData := output.Data().([]float32)
 
 	halfDim := r.halfDim
@@ -100,6 +114,15 @@ func (r *RoPE) ApplyRotation(x *tensor.Tensor, positions []int) (*tensor.Tensor,
 				}
 			}
 		}
+	}
+
+	// If input was on GPU, transfer output back to GPU
+	if x.IsOnGPU() {
+		outputGPU, err := output.ToDevice(tensor.GPU)
+		if err != nil {
+			return nil, fmt.Errorf("failed to transfer RoPE output back to GPU: %w", err)
+		}
+		return outputGPU, nil
 	}
 
 	return output, nil

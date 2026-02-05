@@ -1,13 +1,13 @@
 # CUDA GPU Support - Implementation Status
 
-**Last Updated:** 2026-02-05 18:07 UTC  
-**Status:** ✅ Phase 2 Complete - All Core Operations GPU-Accelerated!
+**Last Updated:** 2026-02-05 19:00 UTC  
+**Status:** ⚠️ Phase 3 In Progress - Critical Bugs Discovered During Testing
 
 ## Overview
 
-CUDA GPU support is now fully functional for Vibrant! All core tensor operations have been implemented with GPU acceleration. The model loads to GPU memory (13.3GB VRAM on RTX 4090) and the complete forward pass can now run on GPU.
+Phase 2 infrastructure is complete with all 12 GPU kernels implemented. However, **critical bugs were discovered during Phase 3 testing** that prevent correct inference. Model loads successfully (13.3GB VRAM), but output is incorrect. Debugging in progress.
 
-**Current State:** Phase 2 complete - all core operations GPU-accelerated. Ready for Phase 3 (performance testing and optimization).
+**Current State:** Phase 3 blocked by bugs. Two bugs fixed (RoPE kernel, CPU fallback), one remaining issue under investigation.
 
 ## ✅ Phase 1: Infrastructure (COMPLETE)
 
@@ -135,26 +135,81 @@ CUDA GPU support is now fully functional for Vibrant! All core tensor operations
 
 **Total:** 12 GPU kernels implemented and integrated
 
-## 🚧 Phase 3: Performance Optimization (NEXT)
+## ⚠️ Phase 3: Performance Optimization (IN PROGRESS - BLOCKED)
 
-### Immediate Goals
-1. **Performance Testing**
-   - Run actual inference with GPU monitoring
+### 🐛 Critical Bugs Discovered (2026-02-05)
+
+**Status:** Testing revealed critical bugs preventing correct inference. Phase 3 blocked until bugs resolved.
+
+#### Bug #1: RoPE Kernel Memory Layout Mismatch ✅ FIXED
+**Symptom:** Model outputs garbage text ("ontvangstĠontvangst..." repeating)
+
+**Root Cause:**
+- CPU uses interleaved pairs: `[x0, x1, x2, x3...]` where (x0,x1), (x2,x3) are pairs  
+- GPU assumed split halves: `[x0, x2..., x1, x3...]` (first half, then second)  
+- Memory layout mismatch → incorrect rotations
+
+**Fix:**
+- Rewrote kernel to process pairs (not elements)
+- Use interleaved indexing: `2*i` and `2*i+1`
+- Launch halfDim threads (one per pair)
+- Files: `kernels.cu`, `launch.cu`
+
+#### Bug #2: RoPE CPU Fallback Broken ✅ FIXED
+**Symptom:** Program hangs when GPU RoPE disabled
+
+**Root Cause:**
+- Line 72 `rope.go`: `xData := x.Data().([]float32)`
+- Tried to access GPU tensor data as CPU memory
+- Would crash or return garbage
+
+**Fix:**
+- Add GPU→CPU transfer before processing
+- Add CPU→GPU transfer after processing
+- Proper device-aware fallback
+- File: `rope.go`
+
+#### Bug #3: Still No Output ❌ INVESTIGATING
+**Symptom:** After fixing bugs 1 & 2, model produces no output (not even garbage)
+
+**Observations:**
+- Model loads successfully (13.3GB) ✅
+- GPU memory allocated correctly ✅
+- Inference starts, then hangs ❌
+- No output after 2+ minutes ❌
+
+**Possible Causes:**
+1. RoPE fix incomplete (logic error)
+2. Other tensor op has similar bug
+3. Generation loop issue
+4. Memory/transfer problem
+5. Attention mechanism bug
+
+**Next Steps:**
+- Add debug logging throughout forward pass
+- Test RoPE in isolation with known values
+- Compare GPU vs CPU outputs at each layer
+- Identify divergence point
+- Fix and verify
+
+### Immediate Goals (AFTER bug fixes)
+1. **Verify Correct Output**
+   - Fix remaining bugs
+   - Generate coherent text
+   - Validate against CPU baseline
+
+2. **Performance Testing**
+   - Run inference with GPU monitoring
    - Measure GPU utilization during generation
    - Benchmark tokens/sec vs CPU
    - Profile for bottlenecks
 
-2. **RMSNorm Weight Caching**
+3. **RMSNorm Weight Caching**
    - Currently transfers weights on every forward pass
    - Optimization: Cache weights on GPU after first transfer
    - Expected: Reduce overhead, improve throughput
 
-3. **Attention & FeedForward Integration**
-   - Ensure Attention mechanism uses GPU tensors
-   - Verify FeedForward operations stay on GPU
-   - Test KV cache GPU compatibility
-
-### Future Optimizations
+### Future Optimizations (Phase 4+)
 4. **Kernel Fusion**
    - Combine operations (e.g., MatMul + Activation)
    - Reduce kernel launch overhead
@@ -169,6 +224,11 @@ CUDA GPU support is now fully functional for Vibrant! All core tensor operations
    - Tensor parallelism across GPUs
    - Pipeline parallelism for large models
    - Load balancing
+
+### Debugging Resources
+- **Session debugging notes:** `.copilot/session-state/.../files/DEBUGGING_NOTES.md`
+- **Test commands:** See debugging notes for full command set
+- **GPU monitoring:** `nvidia-smi dmon -s ucm`
 
 ## Technical Architecture
 
@@ -300,38 +360,67 @@ With parallelism  -          -          ~10x
 
 ## Implementation Timeline
 
-### Phase 1: Infrastructure (COMPLETE - 2026-02-05)
+### Phase 1: Infrastructure ✅ COMPLETE (2026-02-03 to 2026-02-04)
 - ✅ CUDA backend implementation
 - ✅ Quantized model support
 - ✅ Model loading to GPU
 - ✅ Device-aware tensor primitives
-- ✅ GPU kernel library
+- ✅ GPU kernel library (11 kernels)
 
-### Phase 2: Device-Aware Operations (IN PROGRESS)
+### Phase 2: Device-Aware Operations ✅ COMPLETE (2026-02-05)
 **Target:** 70-95% GPU utilization, 10x speedup
-**ETA:** 1-2 weeks
+**Completed:** 2026-02-05 18:07 UTC
 
-- [ ] Update ops.go for element-wise operations (Add, Mul, SiLU)
-- [ ] Implement GPU RMSNorm
-- [ ] Implement GPU Softmax
-- [ ] Implement GPU RoPE
-- [ ] Update Attention for GPU
-- [ ] Update FeedForward for GPU
-- [ ] Integration testing
-- [ ] Performance benchmarking
+- ✅ Update ops.go for element-wise operations (Add, Mul, SiLU)
+- ✅ Implement GPU RMSNorm
+- ✅ Implement GPU Softmax
+- ✅ Implement GPU RoPE (custom kernel!)
+- ✅ Device flag propagation fix
+- ✅ All operations GPU-accelerated (12 kernels total)
+- ✅ Automatic CPU fallback for all operations
 
-### Phase 3: Advanced Features (PLANNED)
+**Commits:**
+1. `feat(gpu): fix device flag propagation and update ops` (8f49d05)
+2. `feat(gpu): implement RoPE GPU kernel` (e56f089)
+3. `docs: update all documentation for Phase 2 completion` (2c0613c)
+
+### Phase 3: Performance Testing & Optimization ⚠️ IN PROGRESS (2026-02-05)
+**Target:** Verify performance, optimize bottlenecks
+**Status:** BLOCKED by bugs discovered during testing
+
+**Started:** 2026-02-05 18:12 UTC
+
+**Progress:**
+- [x] Attempt first GPU inference test
+- [x] Discover critical bugs (garbage output)
+- [x] Fix RoPE kernel memory layout bug
+- [x] Fix RoPE CPU fallback bug
+- [ ] Fix remaining output issue
+- [ ] Verify correct text generation
+- [ ] Measure GPU utilization
+- [ ] Benchmark tokens/sec vs CPU
+- [ ] Profile for bottlenecks
+- [ ] RMSNorm weight caching optimization
+
+**Bugs Fixed:**
+1. ✅ RoPE kernel memory layout mismatch (2026-02-05 18:42 UTC)
+2. ✅ RoPE CPU fallback accessing GPU memory (2026-02-05 18:48 UTC)
+3. ❌ Still no output - under investigation
+
+**Pending Commits:** Waiting for bug fixes to be verified before committing
+
+### Phase 4: Advanced Features 📋 PLANNED
 **Target:** Additional 20-30% speedup through optimization
-**ETA:** 2-3 weeks
+**ETA:** After Phase 3 complete
 
 - Flash Attention (memory-efficient attention)
 - Kernel fusion (reduce memory traffic)
 - Stream scheduling (overlap compute and transfers)
 - Mixed precision (FP16/BF16)
 
-### Phase 4: Production Ready (PLANNED)
+### Phase 5: Production Ready 📋 PLANNED
 **Target:** Production-grade performance and features
-**ETA:** 4-6 weeks
+**ETA:** 4-6 weeks after Phase 3
 
 - Native quantized inference (avoid dequantization)
 - Multi-GPU support
@@ -429,36 +518,75 @@ Key areas for contribution:
 ## Status Dashboard
 
 ```
-Component                Status    GPU Util    Notes
-────────────────────────────────────────────────────────────
-CUDA Backend             ✅ Done   -           Fully functional
-Model Loading            ✅ Done   N/A         13.3GB on RTX 4090
-Memory Management        ✅ Done   -           Buffer pool working
-Tensor Infrastructure    ✅ Done   -           Device-aware primitives
-Element-wise Ops         ✅ Done   Ready       GPU-accelerated
-RMSNorm                  ✅ Done   Ready       GPU-accelerated
-Softmax                  ✅ Done   Ready       GPU-accelerated
-RoPE                     ✅ Done   Ready       Custom GPU kernel!
-Attention                🚧 Ready  TBD         Uses GPU tensors
-FeedForward              🚧 Ready  TBD         Uses GPU tensors
-────────────────────────────────────────────────────────────
-Overall System           ✅ Phase2 TBD         All ops GPU-ready
-                                               Testing next
+Component                Status    Notes
+────────────────────────────────────────────────────────────────────
+CUDA Backend             ✅ Done   Fully functional
+Model Loading            ✅ Done   13.3GB on RTX 4090
+Memory Management        ✅ Done   Buffer pool working
+Tensor Infrastructure    ✅ Done   Device-aware primitives
+Element-wise Ops         ✅ Done   GPU-accelerated (Add, Mul, SiLU)
+RMSNorm                  ✅ Done   GPU-accelerated
+Softmax                  ✅ Done   GPU-accelerated
+RoPE                     ⚠️ Fixed  Bugs fixed, testing blocked
+Attention                🚧 Ready  Uses GPU tensors, not tested
+FeedForward              🚧 Ready  Uses GPU tensors, not tested
+────────────────────────────────────────────────────────────────────
+Overall System           ⚠️ Phase3 Bugs blocking testing
+                                   2 bugs fixed, 1 investigating
 ```
 
-**Legend:** ✅ Complete | 🚧 In Progress | 📋 Planned | ❌ Blocked
+**Legend:** ✅ Complete & Tested | ⚠️ Complete but Buggy | 🚧 Ready | 📋 Planned | ❌ Blocked
 
 ---
 
-## Phase 2 Completion Summary
+## Current Session Summary (2026-02-05 18:12-19:00 UTC)
 
-**Date Completed:** 2026-02-05
+**Activity:** Phase 3 testing - first real GPU inference attempt  
+**Outcome:** Discovered critical bugs, fixed 2, investigating 1 remaining
+
+### Bugs Discovered & Fixed
+
+**Bug #1: RoPE Kernel Memory Layout Mismatch** ✅ FIXED
+- **Symptom:** Garbage output ("ontvangstĠontvangst..." repeating)
+- **Cause:** CPU uses interleaved pairs, GPU assumed split halves
+- **Fix:** Rewrote kernel for interleaved pairs, updated launch params
+- **Files:** `kernels.cu`, `launch.cu`
+
+**Bug #2: RoPE CPU Fallback Broken** ✅ FIXED
+- **Symptom:** Hang when GPU RoPE disabled
+- **Cause:** Tried to access GPU tensor data as CPU memory  
+- **Fix:** Added proper GPU↔CPU transfers in fallback path
+- **File:** `rope.go`
+
+**Bug #3: Still No Output** ❌ INVESTIGATING
+- **Symptom:** After fixes, model produces no output at all
+- **Status:** Under investigation
+- **Next:** Add debug logging, test operations in isolation
+
+### Files Modified (Uncommitted)
+- `internal/gpu/cuda/kernels.cu` - Fixed RoPE kernel
+- `internal/gpu/cuda/launch.cu` - Updated launch parameters
+- `internal/transformer/rope.go` - Fixed CPU fallback
+
+### Debugging Resources
+- **Detailed notes:** `.copilot/session-state/.../files/DEBUGGING_NOTES.md`
+- **Plan:** `.copilot/session-state/.../plan.md`
+- **Test commands:** See debugging notes
+
+**Next Steps:** Continue debugging, fix remaining issue, verify output, resume performance testing
+
+---
+
+## Phase 2 Completion Summary (Historical)
+
+**Date Completed:** 2026-02-05 18:07 UTC
 
 **Commits:**
 1. `feat(gpu): fix device flag propagation and update ops for GPU` (8f49d05)
-2. `feat(gpu): implement RoPE (Rotary Position Embeddings) GPU kernel` (e56f089)
+2. `feat(gpu): implement RoPE GPU kernel` (e56f089)
+3. `docs: update all documentation for Phase 2 completion` (2c0613c)
 
-**Total Changes:** 13 files, 416 insertions
+**Total Changes:** 16 files, 661 insertions, 119 deletions
 
 **Key Achievements:**
 - ✅ Fixed critical device flag propagation bug
@@ -468,5 +596,5 @@ Overall System           ✅ Phase2 TBD         All ops GPU-ready
 - ✅ Custom RoPE CUDA kernel implemented
 - ✅ Automatic fallback to CPU for all operations
 
-**Ready for Phase 3:** Performance testing, optimization, and profiling.
+**Status:** Phase 2 infrastructure complete, Phase 3 testing revealed bugs
 

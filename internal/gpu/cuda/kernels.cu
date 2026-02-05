@@ -355,8 +355,9 @@ __global__ void copy_f32(
 // Rotary Position Embeddings (RoPE)
 // ============================================================================
 
-// Apply RoPE to input tensor
+// Apply RoPE to input tensor using INTERLEAVED PAIRS
 // Input: [batch_size * num_heads * seq_len * head_dim]
+// Memory layout: pairs are interleaved (x0, x1, x2, x3...) where (x0,x1), (x2,x3) are pairs
 // cosTable/sinTable: precomputed cos/sin values [maxSeqLen * halfDim]
 // positions: position indices for each token [seq_len]
 __global__ void rope_f32(
@@ -371,44 +372,43 @@ __global__ void rope_f32(
     int headDim,
     int halfDim
 ) {
-    // Each thread handles one element in the output
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int totalSize = batchSize * numHeads * seqLen * headDim;
+    // Each thread handles ONE PAIR of elements (not single element!)
+    // Total pairs = batchSize * numHeads * seqLen * halfDim
+    int pairIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    int totalPairs = batchSize * numHeads * seqLen * halfDim;
     
-    if (idx < totalSize) {
-        // Decode indices
-        int d = idx % headDim;
-        int s = (idx / headDim) % seqLen;
-        int h = (idx / (headDim * seqLen)) % numHeads;
-        int b = idx / (headDim * seqLen * numHeads);
+    if (pairIdx < totalPairs) {
+        // Decode indices: which batch, head, sequence position, and pair within head_dim
+        int i = pairIdx % halfDim;          // Pair index within head_dim (0 to halfDim-1)
+        int s = (pairIdx / halfDim) % seqLen;
+        int h = (pairIdx / (halfDim * seqLen)) % numHeads;
+        int b = pairIdx / (halfDim * seqLen * numHeads);
         
         // Get position for this token
         int pos = positions[s];
         
-        // Check if this dimension is in the first or second half
-        if (d < halfDim) {
-            // First element of pair: apply cos, -sin rotation
-            int tableIdx = pos * halfDim + d;
-            float c = cosTable[tableIdx];
-            float sn = sinTable[tableIdx];
-            
-            int pairIdx = idx + halfDim; // Second element of pair
-            float x0 = input[idx];
-            float x1 = input[pairIdx];
-            
-            output[idx] = x0 * c - x1 * sn;
-        } else {
-            // Second element of pair: apply sin, cos rotation
-            int d_half = d - halfDim;
-            int tableIdx = pos * halfDim + d_half;
-            float c = cosTable[tableIdx];
-            float sn = sinTable[tableIdx];
-            
-            int pairIdx = idx - halfDim; // First element of pair
-            float x0 = input[pairIdx];
-            float x1 = input[idx];
-            
-            output[idx] = x0 * sn + x1 * c;
-        }
+        // Table lookup
+        int tableIdx = pos * halfDim + i;
+        float c = cosTable[tableIdx];
+        float sn = sinTable[tableIdx];
+        
+        // Compute base offset for this sequence position in the tensor
+        // Layout: [batch][head][seq][dim]
+        int baseOffset = b * (numHeads * seqLen * headDim) + 
+                        h * (seqLen * headDim) + 
+                        s * headDim;
+        
+        // Get indices for the interleaved pair
+        // Pairs are at: (0,1), (2,3), (4,5), ..., (2*i, 2*i+1)
+        int idx0 = baseOffset + 2 * i;      // Even index (first of pair)
+        int idx1 = baseOffset + 2 * i + 1;  // Odd index (second of pair)
+        
+        // Read the pair
+        float x0 = input[idx0];
+        float x1 = input[idx1];
+        
+        // Apply rotation and write back
+        output[idx0] = x0 * c - x1 * sn;
+        output[idx1] = x0 * sn + x1 * c;
     }
 }

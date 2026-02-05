@@ -174,10 +174,12 @@ extern "C" void rope_f32_launch(
     int batchSize, int numHeads, int seqLen, int headDim, int halfDim,
     cudaStream_t stream
 ) {
-    int totalSize = batchSize * numHeads * seqLen * headDim;
+    // Launch one thread per PAIR (not per element)
+    // Total pairs = batchSize * numHeads * seqLen * halfDim
+    int totalPairs = batchSize * numHeads * seqLen * halfDim;
     int blockSize = 256;
     dim3 blockDim(blockSize, 1, 1);
-    dim3 gridDim = calculateGrid1D(totalSize, blockSize);
+    dim3 gridDim = calculateGrid1D(totalPairs, blockSize);
     
     rope_f32<<<gridDim, blockDim, 0, stream>>>(
         input, output, cosTable, sinTable, positions,
