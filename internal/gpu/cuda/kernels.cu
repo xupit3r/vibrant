@@ -350,3 +350,65 @@ __global__ void copy_f32(
         dst[idx] = src[idx];
     }
 }
+
+// ============================================================================
+// Rotary Position Embeddings (RoPE)
+// ============================================================================
+
+// Apply RoPE to input tensor
+// Input: [batch_size * num_heads * seq_len * head_dim]
+// cosTable/sinTable: precomputed cos/sin values [maxSeqLen * halfDim]
+// positions: position indices for each token [seq_len]
+__global__ void rope_f32(
+    const float* input,
+    float* output,
+    const float* cosTable,
+    const float* sinTable,
+    const int* positions,
+    int batchSize,
+    int numHeads,
+    int seqLen,
+    int headDim,
+    int halfDim
+) {
+    // Each thread handles one element in the output
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int totalSize = batchSize * numHeads * seqLen * headDim;
+    
+    if (idx < totalSize) {
+        // Decode indices
+        int d = idx % headDim;
+        int s = (idx / headDim) % seqLen;
+        int h = (idx / (headDim * seqLen)) % numHeads;
+        int b = idx / (headDim * seqLen * numHeads);
+        
+        // Get position for this token
+        int pos = positions[s];
+        
+        // Check if this dimension is in the first or second half
+        if (d < halfDim) {
+            // First element of pair: apply cos, -sin rotation
+            int tableIdx = pos * halfDim + d;
+            float c = cosTable[tableIdx];
+            float sn = sinTable[tableIdx];
+            
+            int pairIdx = idx + halfDim; // Second element of pair
+            float x0 = input[idx];
+            float x1 = input[pairIdx];
+            
+            output[idx] = x0 * c - x1 * sn;
+        } else {
+            // Second element of pair: apply sin, cos rotation
+            int d_half = d - halfDim;
+            int tableIdx = pos * halfDim + d_half;
+            float c = cosTable[tableIdx];
+            float sn = sinTable[tableIdx];
+            
+            int pairIdx = idx - halfDim; // First element of pair
+            float x0 = input[pairIdx];
+            float x1 = input[idx];
+            
+            output[idx] = x0 * sn + x1 * c;
+        }
+    }
+}

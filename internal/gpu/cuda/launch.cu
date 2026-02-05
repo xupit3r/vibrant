@@ -162,3 +162,25 @@ extern "C" void copy_f32_launch(
     
     copy_f32<<<gridDim, blockDim, 0, stream>>>(src, dst, size);
 }
+
+// ============================================================================
+// Rotary Position Embeddings (RoPE)
+// ============================================================================
+
+extern "C" void rope_f32_launch(
+    const float* input, float* output,
+    const float* cosTable, const float* sinTable,
+    const int* positions,
+    int batchSize, int numHeads, int seqLen, int headDim, int halfDim,
+    cudaStream_t stream
+) {
+    int totalSize = batchSize * numHeads * seqLen * headDim;
+    int blockSize = 256;
+    dim3 blockDim(blockSize, 1, 1);
+    dim3 gridDim = calculateGrid1D(totalSize, blockSize);
+    
+    rope_f32<<<gridDim, blockDim, 0, stream>>>(
+        input, output, cosTable, sinTable, positions,
+        batchSize, numHeads, seqLen, headDim, halfDim
+    );
+}

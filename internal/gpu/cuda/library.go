@@ -75,6 +75,14 @@ extern void copy_f32_launch(
 	int size,
 	cudaStream_t stream
 );
+
+extern void rope_f32_launch(
+	const float* input, float* output,
+	const float* cosTable, const float* sinTable,
+	const int* positions,
+	int batchSize, int numHeads, int seqLen, int headDim, int halfDim,
+	cudaStream_t stream
+);
 */
 import "C"
 import (
@@ -380,6 +388,41 @@ func LaunchCopyKernel(src, dst unsafe.Pointer, size int, stream unsafe.Pointer) 
 	err := C.cudaGetLastError()
 	if err != C.cudaSuccess {
 		return fmt.Errorf("copy kernel launch failed: %s", C.GoString(C.cudaGetErrorString(err)))
+	}
+	
+	return nil
+}
+
+// LaunchRoPEKernel calls the rotary position embedding kernel
+func LaunchRoPEKernel(input, output unsafe.Pointer, cosTable, sinTable unsafe.Pointer, positions unsafe.Pointer,
+	batchSize, numHeads, seqLen, headDim, halfDim int, stream unsafe.Pointer) error {
+	if input == nil || output == nil || cosTable == nil || sinTable == nil || positions == nil {
+		return fmt.Errorf("null pointer passed to rope kernel")
+	}
+	if batchSize <= 0 || numHeads <= 0 || seqLen <= 0 || headDim <= 0 || halfDim <= 0 {
+		return fmt.Errorf("invalid dimensions: batch=%d heads=%d seq=%d dim=%d half=%d",
+			batchSize, numHeads, seqLen, headDim, halfDim)
+	}
+
+	cudaStream := (C.cudaStream_t)(stream)
+	
+	C.rope_f32_launch(
+		(*C.float)(input),
+		(*C.float)(output),
+		(*C.float)(cosTable),
+		(*C.float)(sinTable),
+		(*C.int)(positions),
+		C.int(batchSize),
+		C.int(numHeads),
+		C.int(seqLen),
+		C.int(headDim),
+		C.int(halfDim),
+		cudaStream,
+	)
+	
+	err := C.cudaGetLastError()
+	if err != C.cudaSuccess {
+		return fmt.Errorf("rope kernel launch failed: %s", C.GoString(C.cudaGetErrorString(err)))
 	}
 	
 	return nil

@@ -34,6 +34,9 @@ type KernelSet struct {
 	SiLU      *Kernel
 	Copy      *Kernel
 
+	// Positional embeddings
+	RoPE *Kernel
+
 	// Kernel function pointers (stored as void*)
 	kernelFuncs map[string]unsafe.Pointer
 }
@@ -67,6 +70,7 @@ func NewKernelSet() (*KernelSet, error) {
 		"mul_scalar_f32",
 		"silu_f32",
 		"copy_f32",
+		"rope_f32",
 	}
 
 	for _, name := range kernelNames {
@@ -98,6 +102,8 @@ func NewKernelSet() (*KernelSet, error) {
 			ks.SiLU = kernel
 		case "copy_f32":
 			ks.Copy = kernel
+		case "rope_f32":
+			ks.RoPE = kernel
 		}
 	}
 
@@ -240,6 +246,21 @@ func (ks *KernelSet) LaunchCopy(
 		return fmt.Errorf("copy kernel not loaded")
 	}
 	return LaunchCopyKernel(src, dst, size, stream)
+}
+
+// LaunchRoPE launches the rotary position embedding kernel
+func (ks *KernelSet) LaunchRoPE(
+	input, output unsafe.Pointer,
+	cosTable, sinTable unsafe.Pointer,
+	positions unsafe.Pointer,
+	batchSize, numHeads, seqLen, headDim, halfDim int,
+	stream unsafe.Pointer,
+) error {
+	if ks.RoPE == nil {
+		return fmt.Errorf("rope kernel not loaded")
+	}
+	return LaunchRoPEKernel(input, output, cosTable, sinTable, positions,
+		batchSize, numHeads, seqLen, headDim, halfDim, stream)
 }
 
 // Free releases kernel resources

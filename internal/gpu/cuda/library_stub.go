@@ -52,3 +52,8 @@ func LaunchSiLUKernel(input, output unsafe.Pointer, size int, stream unsafe.Poin
 func LaunchCopyKernel(src, dst unsafe.Pointer, size int, stream unsafe.Pointer) error {
 	return fmt.Errorf("CUDA is only supported on Linux with CGO enabled")
 }
+
+func LaunchRoPEKernel(input, output unsafe.Pointer, cosTable, sinTable unsafe.Pointer, positions unsafe.Pointer,
+	batchSize, numHeads, seqLen, headDim, halfDim int, stream unsafe.Pointer) error {
+	return fmt.Errorf("CUDA is only supported on Linux with CGO enabled")
+}

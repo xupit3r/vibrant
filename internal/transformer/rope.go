@@ -56,7 +56,16 @@ func (r *RoPE) ApplyRotation(x *tensor.Tensor, positions []int) (*tensor.Tensor,
 		return nil, nil // Return input unchanged if dimensions don't match
 	}
 
-	// Create output tensor
+	// Try GPU path first
+	if x.IsOnGPU() {
+		output := tensor.RoPEGPU(x, r.cosTable, r.sinTable, positions)
+		if output != nil {
+			return output, nil
+		}
+		// Fall through to CPU if GPU fails
+	}
+
+	// CPU fallback: Create output tensor on CPU
 	output := tensor.NewTensor(shape, tensor.Float32)
 
 	// Direct slice access — no At()/Set() calls

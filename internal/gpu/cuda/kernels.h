@@ -131,4 +131,25 @@ extern "C" __global__ void copy_f32(
     int size
 );
 
+// ============================================================================
+// Rotary Position Embeddings (RoPE)
+// ============================================================================
+
+// Apply RoPE to input tensor
+// input: [batch_size * num_heads * seq_len * head_dim]
+// cosTable/sinTable: precomputed cos/sin values [maxSeqLen * halfDim]
+// positions: position indices for each token [seq_len]
+extern "C" __global__ void rope_f32(
+    const float* input,
+    float* output,
+    const float* cosTable,
+    const float* sinTable,
+    const int* positions,
+    int batchSize,
+    int numHeads,
+    int seqLen,
+    int headDim,
+    int halfDim
+);
+
 #endif // VIBRANT_CUDA_KERNELS_H
