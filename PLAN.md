@@ -303,7 +303,8 @@ The `specs/` directory will contain detailed technical specifications for each m
 - Add diagrams where helpful (ASCII art, mermaid, etc.)
 
 ## Notes
-- Focus on CPU inference - avoid CUDA/GPU dependencies
+- CPU inference is default build (CGO_ENABLED=0)
+- GPU acceleration available via Metal (macOS) and CUDA (Linux) with CGO builds
 - Prioritize small, efficient models for better response times
 - Consider supporting both local models and ollama integration
 - Keep configuration simple (sensible defaults)
@@ -696,6 +697,35 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 
 See `docs/results/GPU_VALIDATION_RESULTS.md` for detailed performance analysis.
 
+### Phase 11.3: NVIDIA CUDA GPU Support ⏳ IN PROGRESS
+**Goal**: Add NVIDIA GPU support (RTX 4090) for Linux systems, matching Metal's architecture
+
+- [ ] CUDA device foundation (CGO bindings, buffer management)
+- [ ] Buffer pooling (efficient memory reuse)
+- [ ] Kernel infrastructure (compilation, execution)
+- [ ] Matrix operations (matmul, matmul_single_row)
+- [ ] Normalization kernels (softmax, RMS norm, batched variants)
+- [ ] Element-wise operations (add, mul, mul_scalar, SiLU, copy)
+- [ ] Device selection integration (explicit `--device cuda` flag)
+- [ ] Testing & validation (correctness, performance benchmarks)
+- [ ] Documentation (specs, setup guide, results)
+
+**Implementation Approach**:
+- Direct CGO bindings to CUDA Runtime API (mirrors Metal)
+- Pre-compiled kernels with nvcc at build time
+- Build tags for Linux + CGO (`// +build linux,cgo`)
+- Full feature parity with Metal (11 kernels, buffer pooling)
+- Manual device selection initially (auto-detection in Phase 11.10)
+
+**Expected Performance** (RTX 4090):
+- Large operations: 10-15x speedup vs CPU
+- Medium operations: 8-12x speedup vs CPU
+- Full inference: 3-5x end-to-end speedup
+
+**Deliverable**: NVIDIA GPU acceleration for Linux with explicit device selection
+
+See session plan: `~/.copilot/session-state/.../plan.md` for detailed implementation roadmap.
+
 ### Vision
 Enable Vibrant to leverage GPU compute and run models larger than available memory through intelligent offloading, based on research from the SpecExec paper (NeurIPS 2024).
 
@@ -853,7 +883,7 @@ internal/
 │   ├── metal/               # Apple Metal backend
 │   │   ├── compute.go
 │   │   └── kernels.metal
-│   └── cuda/                # NVIDIA CUDA (future)
+│   └── cuda/                # NVIDIA CUDA (Phase 11.3)
 │
 ├── offload/          # NEW: RAM/disk offloading
 │   ├── manager.go           # Offload orchestration

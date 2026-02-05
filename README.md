@@ -8,7 +8,7 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 
 ## Features
 
-- 🚀 **GPU Accelerated**: Metal GPU support on Apple Silicon with 6.4x speedup for large operations
+- 🚀 **GPU Accelerated**: Metal GPU support on Apple Silicon (6.4x speedup), CUDA coming soon
 - 🖥️  **CPU-optimized**: Runs efficiently on CPU using quantized models (GGUF format)
 - 🧠 **Context-aware**: Understands your codebase structure with semantic search (RAG)
 - 🎯 **Auto-tuned**: Automatically selects the best model based on your system RAM
@@ -27,9 +27,11 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 
 ✅ **Feature Complete** - Agentic code assistant with GPU acceleration!
 
-**Current Phase**: Phase 11.1 - GPU Backend Foundation ✅ **COMPLETE**
+**Current Phase**: Phase 11.3 - CUDA GPU Support ⏳ **IN PROGRESS**
 
-**GPU Backend (Phase 11.1)** - Just completed!
+**GPU Backend**:
+- ✅ Phase 11.1: Metal GPU support for Apple Silicon (complete)
+- ⏳ Phase 11.3: NVIDIA CUDA support for Linux (in progress)
 - ✅ Metal GPU backend for Apple Silicon
 - ✅ Device abstraction layer (CPU/GPU)
 - ✅ GPU kernels for MatMul, Softmax, RMSNorm
