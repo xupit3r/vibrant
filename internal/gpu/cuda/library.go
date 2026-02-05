@@ -3,8 +3,8 @@
 package cuda
 
 /*
-#cgo CFLAGS: -I/usr/local/cuda/include
-#cgo LDFLAGS: -L/usr/local/cuda/lib64 -lcudart -lstdc++
+#cgo CFLAGS: -I/opt/cuda/include -I/usr/local/cuda/include
+#cgo LDFLAGS: -L/opt/cuda/lib64 -L/usr/local/cuda/lib64 -lcudart -lstdc++
 
 #include <cuda_runtime.h>
 #include <stdlib.h>

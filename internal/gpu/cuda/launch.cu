@@ -72,7 +72,7 @@ extern "C" void softmax_batched_f32_launch(
     int blockSize = 256;
     int sharedMemSize = 2 * sizeof(float) * blockSize; // Per-thread max and sum
     
-    softmax_batched_f32<<<batch_size, blockSize, sharedMemSize, stream>>>(input, output, size);
+    softmax_batched_f32<<<batch_size, blockSize, sharedMemSize, stream>>>(input, output, batch_size, size);
 }
 
 extern "C" void rms_norm_f32_launch(
@@ -96,7 +96,7 @@ extern "C" void rms_norm_batched_f32_launch(
     int blockSize = 256;
     int sharedMemSize = blockSize * sizeof(float);
     
-    rms_norm_batched_f32<<<batch_size, blockSize, sharedMemSize, stream>>>(input, weight, output, size, eps);
+    rms_norm_batched_f32<<<batch_size, blockSize, sharedMemSize, stream>>>(input, weight, output, batch_size, size, eps);
 }
 
 // ============================================================================

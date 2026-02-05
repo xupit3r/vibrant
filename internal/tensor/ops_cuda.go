@@ -4,6 +4,7 @@ package tensor
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/xupit3r/vibrant/internal/gpu"
 	"github.com/xupit3r/vibrant/internal/gpu/cuda"
@@ -54,18 +55,18 @@ func matmulGPU(a, b *Tensor) *Tensor {
 	if M == 1 {
 		// Single-row optimization for decode step
 		launchErr = kernels.LaunchMatMulSingleRow(
-			a.gpuBuffer.Ptr(),
-			b.gpuBuffer.Ptr(),
-			outputBuf.Ptr(),
+			unsafe.Pointer(a.gpuBuffer.Ptr()),
+			unsafe.Pointer(b.gpuBuffer.Ptr()),
+			unsafe.Pointer(outputBuf.Ptr()),
 			N, K,
 			nil, // default stream
 		)
 	} else {
 		// General matrix multiplication
 		launchErr = kernels.LaunchMatMul(
-			a.gpuBuffer.Ptr(),
-			b.gpuBuffer.Ptr(),
-			outputBuf.Ptr(),
+			unsafe.Pointer(a.gpuBuffer.Ptr()),
+			unsafe.Pointer(b.gpuBuffer.Ptr()),
+			unsafe.Pointer(outputBuf.Ptr()),
 			M, N, K,
 			nil, // default stream
 		)
@@ -136,8 +137,8 @@ func softmaxGPU(input *Tensor) *Tensor {
 
 	// Launch kernel
 	err = kernels.LaunchSoftmax(
-		input.gpuBuffer.Ptr(),
-		outputBuf.Ptr(),
+		unsafe.Pointer(input.gpuBuffer.Ptr()),
+		unsafe.Pointer(outputBuf.Ptr()),
 		size,
 		nil, // default stream
 	)
@@ -209,9 +210,9 @@ func rmsNormGPU(input, weight *Tensor, eps float32) *Tensor {
 
 	// Launch kernel
 	err = kernels.LaunchRMSNorm(
-		input.gpuBuffer.Ptr(),
-		weight.gpuBuffer.Ptr(),
-		outputBuf.Ptr(),
+		unsafe.Pointer(input.gpuBuffer.Ptr()),
+		unsafe.Pointer(weight.gpuBuffer.Ptr()),
+		unsafe.Pointer(outputBuf.Ptr()),
 		size,
 		eps,
 		nil, // default stream
@@ -284,9 +285,9 @@ func addGPU(a, b *Tensor) *Tensor {
 
 	// Launch kernel
 	err = kernels.LaunchAdd(
-		a.gpuBuffer.Ptr(),
-		b.gpuBuffer.Ptr(),
-		outputBuf.Ptr(),
+		unsafe.Pointer(a.gpuBuffer.Ptr()),
+		unsafe.Pointer(b.gpuBuffer.Ptr()),
+		unsafe.Pointer(outputBuf.Ptr()),
 		size,
 		nil, // default stream
 	)
@@ -358,9 +359,9 @@ func mulGPU(a, b *Tensor) *Tensor {
 
 	// Launch kernel
 	err = kernels.LaunchMul(
-		a.gpuBuffer.Ptr(),
-		b.gpuBuffer.Ptr(),
-		outputBuf.Ptr(),
+		unsafe.Pointer(a.gpuBuffer.Ptr()),
+		unsafe.Pointer(b.gpuBuffer.Ptr()),
+		unsafe.Pointer(outputBuf.Ptr()),
 		size,
 		nil, // default stream
 	)
@@ -428,8 +429,8 @@ func siluGPU(input *Tensor) *Tensor {
 
 	// Launch kernel
 	err = kernels.LaunchSiLU(
-		input.gpuBuffer.Ptr(),
-		outputBuf.Ptr(),
+		unsafe.Pointer(input.gpuBuffer.Ptr()),
+		unsafe.Pointer(outputBuf.Ptr()),
 		size,
 		nil, // default stream
 	)

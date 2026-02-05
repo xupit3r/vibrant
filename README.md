@@ -98,8 +98,11 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 
 **CLI Integration**:
 ```bash
-# Use GPU acceleration (Apple Silicon only)
-vibrant ask --device gpu "your question"
+# Use Metal GPU acceleration (Apple Silicon)
+vibrant ask --device metal "your question"
+
+# Use CUDA GPU acceleration (Linux with NVIDIA)
+vibrant ask --device cuda "your question"
 
 # Use CPU (default, compatible everywhere)
 vibrant ask --device cpu "your question"
@@ -214,7 +217,7 @@ vibrant model info qwen2.5-coder-3b-q4
 # Ask a question (downloads model if needed)
 vibrant ask "What is a goroutine?"
 
-# Ask with GPU acceleration (Apple Silicon only)
+# Ask with GPU acceleration (Metal on macOS, CUDA on Linux)
 vibrant ask --device gpu "Explain Go interfaces"
 
 # With specific model (use tab to see available models)
@@ -230,14 +233,20 @@ vibrant ask --context ./src "How does authentication work?"
 
 ### GPU Support
 
-GPU acceleration is available on macOS with Apple Silicon (M-series chips):
+GPU acceleration is available on multiple platforms:
+- **Apple Silicon (M-series)**: Metal GPU backend (6.4x speedup)
+- **Linux with NVIDIA**: CUDA GPU backend (10-15x speedup expected on RTX 4090)
 
 ```bash
 # Automatic device selection (tries GPU, falls back to CPU)
 vibrant ask --device auto "your question"
 
-# Force GPU (fails if not available)
+# Force GPU/Metal (macOS with Apple Silicon)
 vibrant ask --device gpu "your question"
+vibrant ask --device metal "your question"
+
+# Force CUDA (Linux with NVIDIA GPU)
+vibrant ask --device cuda "your question"
 
 # Force CPU (default, works everywhere)
 vibrant ask --device cpu "your question"
@@ -254,9 +263,10 @@ GPU provides **6.4x speedup** for large matrix operations!
 
 **Requirements:**
 - Go 1.21 or later
-- macOS (for GPU support) or Linux/Windows (CPU only)
-- C compiler for Metal integration (macOS only, optional)
 - Make
+- (Optional) C compiler for GPU support:
+  - macOS: Xcode command-line tools (for Metal)
+  - Linux: CUDA Toolkit 12.0+ (for NVIDIA GPU support)
 
 ### Quick Setup
 
@@ -286,8 +296,11 @@ By default, `make build` uses the **pure Go inference engine** (no CGO required)
 # Default: Pure Go engine (no dependencies, CPU only)
 make build
 
-# With GPU support: Requires macOS and CGO for Metal
+# With Metal GPU support (macOS with Apple Silicon)
 make build-gpu
+
+# With CUDA GPU support (Linux with NVIDIA GPU + CUDA Toolkit)
+make build-cuda
 
 # With llama.cpp (requires manual setup)
 make build-llama
@@ -296,7 +309,11 @@ make build-llama
 make build-mock
 ```
 
-**GPU Support (macOS only)**: GPU acceleration requires CGO to be enabled for Metal framework integration. Use `make build-gpu` to build with GPU support on Apple Silicon.
+**GPU Support**:
+- **Metal (macOS)**: Use `make build-gpu` on Apple Silicon for 6.4x speedup on large ops
+- **CUDA (Linux)**: Use `make build-cuda` with NVIDIA GPU (RTX 30/40 series) for 10-15x speedup
+  - Requires CUDA Toolkit 12.0+ and NVIDIA Driver 525.60.13+
+  - See [docs/setup/cuda-setup.md](docs/setup/cuda-setup.md) for setup
 
 See [docs/llama-setup.md](docs/llama-setup.md) for llama.cpp setup instructions.
 

@@ -734,6 +734,14 @@ See `docs/results/GPU_VALIDATION_RESULTS.md` for detailed performance analysis.
 - 7a105a6: Kernel launch infrastructure
 - c0b4ef5: Tensor integration
 - 52134ac: Device selection CLI
+- [Current]: CUDA build fixes (kernel parameter matching, CUDA path support, uintptr→unsafe.Pointer conversion)
+
+**Recent Updates** (February 5, 2026):
+- ✅ Fixed CUDA kernel launch parameter mismatch (softmax_batched_f32, rms_norm_batched_f32)
+- ✅ Added support for `/opt/cuda` paths alongside `/usr/local/cuda`
+- ✅ Fixed type conversion issues (uintptr → unsafe.Pointer) in tensor ops
+- ✅ Fixed build tag conflicts in GPU stub files
+- ✅ Verified `make build-cuda` now completes successfully
 
 ### Vision
 Enable Vibrant to leverage GPU compute and run models larger than available memory through intelligent offloading, based on research from the SpecExec paper (NeurIPS 2024).

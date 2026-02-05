@@ -1,4 +1,5 @@
-// +build !darwin !linux !cgo
+// +build !linux !cgo
+// +build !darwin
 
 package tensor
 
