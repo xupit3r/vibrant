@@ -27,20 +27,31 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 
 ✅ **Feature Complete** - Agentic code assistant with GPU acceleration!
 
-**Current Phase**: Phase 11.3 - CUDA GPU Support ✅ **COMPLETE** (Validated on RTX 4090)
+**Current Phase**: Phase 11.3 - CUDA GPU Support 🚧 **IN PROGRESS** (Phase 1 Complete, Phase 2 In Progress)
 
 **GPU Backend**:
-- ✅ Phase 11.1: Metal GPU support for Apple Silicon (complete)
-- ✅ Phase 11.3: NVIDIA CUDA support for Linux (complete, validated on RTX 4090)
-- ✅ Metal GPU backend for Apple Silicon (6.4x speedup)
-- ✅ CUDA GPU backend for NVIDIA GPUs on Linux (validated on RTX 4090)
+- ✅ Phase 11.1: Metal GPU support for Apple Silicon (complete, 6.4x speedup)
+- 🚧 Phase 11.3: NVIDIA CUDA support for Linux (infrastructure complete, operations in progress)
+  - ✅ Phase 1: CUDA infrastructure and model loading (COMPLETE)
+  - 🚧 Phase 2: Device-aware tensor operations (IN PROGRESS)
+- ✅ Metal GPU backend for Apple Silicon
+- ✅ CUDA GPU backend for NVIDIA GPUs on Linux (RTX 4090 validated)
 - ✅ Device abstraction layer (CPU/GPU/Metal/CUDA)
-- ✅ 11 GPU kernels: MatMul, Softmax, RMSNorm, element-wise ops
+- ✅ 11 GPU kernels ready: MatMul, Softmax, RMSNorm, element-wise ops
 - ✅ Tensor device migration (CPU ↔ GPU)
-- ✅ Memory management with buffer pooling
+- ✅ Memory management with buffer pooling (19GB pool on RTX 4090)
 - ✅ CLI integration with `--device` flag (auto, cpu, gpu, metal, cuda)
+- ✅ Quantized model support with automatic GPU dequantization
+- ✅ Device-aware tensor creation infrastructure
+- 🚧 Device-aware tensor operations (next: RMSNorm, Softmax, RoPE)
 
-**Performance Results**:
+**CUDA Performance Status**:
+- Model loading: ✅ Working (13GB VRAM for 3B model)
+- GPU utilization: 1-17% (Phase 1 - limited by CPU tensor creation)
+- Target utilization: 70-95% (Phase 2 - after device-aware ops)
+- Expected speedup: 10x after Phase 2 completion
+
+**Metal Performance Results** (Apple Silicon):
 - Single-row (decode): CPU faster (low overhead)
 - Medium ops (128×128): 1.37x GPU speedup
 - Large ops (512×512): **6.4x GPU speedup**
