@@ -253,6 +253,116 @@ func Ones(shape []int, dtype DataType) *Tensor {
 	return t
 }
 
+// NewTensorOnDevice creates a new tensor on the specified device (CPU or GPU)
+// For GPU tensors, allocates GPU buffer directly without CPU backing store
+func NewTensorOnDevice(shape []int, dtype DataType, device Device) (*Tensor, error) {
+	// For CPU, use existing constructor
+	if device == CPU {
+		return NewTensor(shape, dtype), nil
+	}
+
+	// For GPU, allocate buffer directly on GPU
+	if device == GPU {
+		// Calculate total size in bytes
+		numElements := 1
+		for _, dim := range shape {
+			numElements *= dim
+		}
+
+		var bufferSize int64
+		switch dtype {
+		case Float32:
+			bufferSize = int64(numElements * 4)
+		case Float16:
+			bufferSize = int64(numElements * 2)
+		default:
+			return nil, fmt.Errorf("unsupported dtype %v for GPU tensors", dtype)
+		}
+
+		// Get default GPU device
+		dev, err := gpu.GetDefaultDevice()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get GPU device: %w", err)
+		}
+
+		// Allocate GPU buffer
+		buf, err := dev.Allocate(bufferSize)
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate GPU buffer: %w", err)
+		}
+
+		// Create tensor with GPU buffer, no CPU backing store
+		return &Tensor{
+			data:       nil, // No CPU data for GPU-only tensors
+			shape:      shape,
+			stride:     computeStrides(shape),
+			dtype:      dtype,
+			device:     GPU,
+			offset:     0,
+			gpuBuffer:  buf,
+			gpuDevice:  dev,
+			gpuKernels: nil,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("unsupported device: %v", device)
+}
+
+// Clone creates a copy of the tensor on the same device
+func (t *Tensor) Clone() (*Tensor, error) {
+	// Create new tensor on same device
+	cloned, err := NewTensorOnDevice(t.shape, t.dtype, t.device)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cloned tensor: %w", err)
+	}
+
+	// Copy data
+	if t.device == GPU {
+		// GPU → GPU copy
+		if t.gpuBuffer == nil || cloned.gpuBuffer == nil {
+			return nil, fmt.Errorf("GPU buffer not allocated")
+		}
+		err := t.gpuDevice.Copy(cloned.gpuBuffer, t.gpuBuffer, t.gpuBuffer.Size())
+		if err != nil {
+			cloned.Free()
+			return nil, fmt.Errorf("failed to copy GPU data: %w", err)
+		}
+	} else {
+		// CPU → CPU copy
+		switch t.dtype {
+		case Float32:
+			srcData := t.data.([]float32)
+			dstData := cloned.data.([]float32)
+			copy(dstData, srcData)
+		case Float16:
+			srcData := t.data.([]uint16)
+			dstData := cloned.data.([]uint16)
+			copy(dstData, srcData)
+		default:
+			srcData := t.data.([]uint8)
+			dstData := cloned.data.([]uint8)
+			copy(dstData, srcData)
+		}
+	}
+
+	// Copy other metadata
+	cloned.transposed = t.transposed
+	cloned.offset = t.offset
+
+	return cloned, nil
+}
+
+// Free releases GPU resources if tensor is on GPU
+func (t *Tensor) Free() error {
+	if t.gpuBuffer != nil {
+		err := t.gpuBuffer.Free()
+		t.gpuBuffer = nil
+		t.gpuDevice = nil
+		return err
+	}
+	return nil
+}
+
 // computeStrides calculates memory layout strides for the given shape
 func computeStrides(shape []int) []int {
 	strides := make([]int, len(shape))
@@ -364,6 +474,53 @@ func (t *Tensor) Set(value float32, indices ...int) {
 // Data returns the underlying data (use with caution)
 func (t *Tensor) Data() interface{} {
 	return t.data
+}
+
+// EnsureCPUData ensures the tensor has CPU-accessible data
+// If tensor is on GPU with no CPU copy, transfers data from GPU to CPU
+// Returns the CPU data interface
+func (t *Tensor) EnsureCPUData() (interface{}, error) {
+	// If already have CPU data, return it
+	if t.data != nil {
+		return t.data, nil
+	}
+
+	// If on GPU, need to transfer
+	if t.device == GPU && t.gpuBuffer != nil {
+		// Allocate CPU buffer
+		numElements := 1
+		for _, dim := range t.shape {
+			numElements *= dim
+		}
+
+		var data interface{}
+		switch t.dtype {
+		case Float32:
+			data = make([]float32, numElements)
+			// Copy from GPU
+			bytes := make([]byte, numElements*4)
+			if err := t.gpuBuffer.CopyToHost(bytes); err != nil {
+				return nil, fmt.Errorf("failed to copy from GPU: %w", err)
+			}
+			// Convert bytes to float32
+			dataSlice := data.([]float32)
+			for i := range dataSlice {
+				dataSlice[i] = *(*float32)(unsafe.Pointer(&bytes[i*4]))
+			}
+		case Float16:
+			data = make([]uint16, numElements)
+			// Similar transfer for float16
+			return nil, fmt.Errorf("float16 GPU→CPU transfer not yet implemented")
+		default:
+			return nil, fmt.Errorf("unsupported dtype %v for GPU→CPU transfer", t.dtype)
+		}
+
+		// Cache CPU copy
+		t.data = data
+		return data, nil
+	}
+
+	return nil, fmt.Errorf("tensor has no data on CPU or GPU")
 }
 
 // Float32Data returns the underlying float32 slice directly.

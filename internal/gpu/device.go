@@ -51,7 +51,9 @@ func (dt DeviceType) String() string {
 }
 
 // GetDefaultDevice returns the default device for the current system
-// On Apple Silicon, returns Metal GPU device if available, otherwise CPU
+// On Apple Silicon, returns Metal GPU device if available
+// On Linux, returns CUDA GPU device if available
+// Otherwise returns CPU device
 func GetDefaultDevice() (Device, error) {
 	// Check if we're on macOS with Metal support
 	if runtime.GOOS == "darwin" && (runtime.GOARCH == "arm64" || runtime.GOARCH == "amd64") {
@@ -60,6 +62,15 @@ func GetDefaultDevice() (Device, error) {
 			return dev, nil
 		}
 		// Fall back to CPU if Metal initialization fails
+	}
+
+	// Check if we're on Linux with CUDA support
+	if runtime.GOOS == "linux" {
+		dev, err := NewCUDADevice()
+		if err == nil {
+			return dev, nil
+		}
+		// Fall back to CPU if CUDA initialization fails
 	}
 
 	return NewCPUDevice(), nil
