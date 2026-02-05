@@ -40,8 +40,8 @@ type KernelSet struct {
 
 // Kernel represents a compiled CUDA kernel function
 type Kernel struct {
-	name string
-	func unsafe.Pointer
+	name     string
+	funcPtr  unsafe.Pointer
 }
 
 // NewKernelSet loads all CUDA kernels
@@ -71,8 +71,8 @@ func NewKernelSet() (*KernelSet, error) {
 
 	for _, name := range kernelNames {
 		kernel := &Kernel{
-			name: name,
-			func: nil, // Will be populated when kernels are loaded
+			name:    name,
+			funcPtr: nil, // Will be populated when kernels are loaded
 		}
 
 		switch name {
@@ -114,10 +114,7 @@ func (ks *KernelSet) LaunchMatMul(
 	if ks.MatMul == nil {
 		return fmt.Errorf("matmul kernel not loaded")
 	}
-
-	// For now, return not implemented
-	// This will be filled in once we have actual kernel compilation
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchMatMulKernel(A, B, C, M, N, K, stream)
 }
 
 // LaunchMatMulSingleRow launches single-row matmul (for decode phase)
@@ -130,7 +127,7 @@ func (ks *KernelSet) LaunchMatMulSingleRow(
 	if ks.MatMulSingleRow == nil {
 		return fmt.Errorf("matmul_single_row kernel not loaded")
 	}
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchMatMulSingleRowKernel(A, B, C, N, K, stream)
 }
 
 // LaunchSoftmax launches the softmax kernel
@@ -142,7 +139,7 @@ func (ks *KernelSet) LaunchSoftmax(
 	if ks.Softmax == nil {
 		return fmt.Errorf("softmax kernel not loaded")
 	}
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchSoftmaxKernel(input, output, size, stream)
 }
 
 // LaunchSoftmaxBatched launches the batched softmax kernel
@@ -154,7 +151,7 @@ func (ks *KernelSet) LaunchSoftmaxBatched(
 	if ks.SoftmaxBatched == nil {
 		return fmt.Errorf("softmax_batched kernel not loaded")
 	}
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchSoftmaxBatchedKernel(input, output, batchSize, size, stream)
 }
 
 // LaunchRMSNorm launches the RMS normalization kernel
@@ -167,7 +164,7 @@ func (ks *KernelSet) LaunchRMSNorm(
 	if ks.RMSNorm == nil {
 		return fmt.Errorf("rms_norm kernel not loaded")
 	}
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchRMSNormKernel(input, weight, output, size, eps, stream)
 }
 
 // LaunchRMSNormBatched launches the batched RMS normalization kernel
@@ -180,7 +177,7 @@ func (ks *KernelSet) LaunchRMSNormBatched(
 	if ks.RMSNormBatched == nil {
 		return fmt.Errorf("rms_norm_batched kernel not loaded")
 	}
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchRMSNormBatchedKernel(input, weight, output, batchSize, size, eps, stream)
 }
 
 // LaunchAdd launches the element-wise addition kernel
@@ -192,7 +189,7 @@ func (ks *KernelSet) LaunchAdd(
 	if ks.Add == nil {
 		return fmt.Errorf("add kernel not loaded")
 	}
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchAddKernel(A, B, C, size, stream)
 }
 
 // LaunchMul launches the element-wise multiplication kernel
@@ -204,7 +201,7 @@ func (ks *KernelSet) LaunchMul(
 	if ks.Mul == nil {
 		return fmt.Errorf("mul kernel not loaded")
 	}
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchMulKernel(A, B, C, size, stream)
 }
 
 // LaunchMulScalar launches the scalar multiplication kernel
@@ -218,7 +215,7 @@ func (ks *KernelSet) LaunchMulScalar(
 	if ks.MulScalar == nil {
 		return fmt.Errorf("mul_scalar kernel not loaded")
 	}
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchMulScalarKernel(A, scalar, B, size, stream)
 }
 
 // LaunchSiLU launches the SiLU activation kernel
@@ -230,7 +227,7 @@ func (ks *KernelSet) LaunchSiLU(
 	if ks.SiLU == nil {
 		return fmt.Errorf("silu kernel not loaded")
 	}
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchSiLUKernel(input, output, size, stream)
 }
 
 // LaunchCopy launches the copy kernel
@@ -242,7 +239,7 @@ func (ks *KernelSet) LaunchCopy(
 	if ks.Copy == nil {
 		return fmt.Errorf("copy kernel not loaded")
 	}
-	return fmt.Errorf("kernel execution not yet implemented (Phase 3 in progress)")
+	return LaunchCopyKernel(src, dst, size, stream)
 }
 
 // Free releases kernel resources

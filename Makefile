@@ -45,12 +45,22 @@ build-gpu: ## Build with GPU support (requires macOS and CGO for Metal)
 
 build-cuda: ## Build with CUDA GPU support (requires Linux, NVIDIA GPU, and CUDA toolkit)
 	@echo "Building $(BINARY_NAME) with CUDA GPU support..."
-	@CGO_ENABLED=1 go build $(LDFLAGS) -o $(BINARY_NAME) $(CMD_DIR)
+	@echo "⚠️  This requires:"
+	@echo "   - CUDA Toolkit 12.0+"
+	@echo "   - NVIDIA GPU with compute capability 8.6+ (RTX 30/40 series)"
+	@echo "   - NVIDIA Driver 525.60.13+"
+	@echo ""
+	@./scripts/compile-cuda-kernels.sh
+	@echo ""
+	@echo "Building Go binary with CUDA support..."
+	@CGO_ENABLED=1 \
+		CGO_LDFLAGS="-L$(shell pwd)/build/cuda -lvibrant_cuda -L/usr/local/cuda/lib64 -lcudart" \
+		go build $(LDFLAGS) -o $(BINARY_NAME) $(CMD_DIR)
 	@echo "✅ Build complete: ./$(BINARY_NAME) (with CUDA GPU support)"
 	@echo ""
-	@echo "💡 This build includes CUDA GPU acceleration for NVIDIA GPUs"
-	@echo "   Requires: CUDA Toolkit 12.0+, NVIDIA Driver 525.60.13+"
-	@echo "   Use --device cuda flag to enable CUDA acceleration"
+	@echo "💡 To run with CUDA:"
+	@echo "   export LD_LIBRARY_PATH=$(shell pwd)/build/cuda:/usr/local/cuda/lib64:\$$LD_LIBRARY_PATH"
+	@echo "   ./$(BINARY_NAME) --device cuda"
 
 build-llama: ## Build with llama.cpp inference (requires C++ compiler and CGO)
 	@echo "Building $(BINARY_NAME) with llama.cpp..."
@@ -89,6 +99,7 @@ clean: ## Clean build artifacts
 	@echo "Cleaning..."
 	@rm -f $(BINARY_NAME)
 	@rm -rf $(BUILD_DIR)
+	@rm -rf build/cuda
 	@go clean
 	@echo "Clean complete"
 
@@ -164,6 +175,9 @@ bench-compare: ## Run benchmarks and compare with baseline
 
 check-deps: ## Check for required dependencies
 	@./scripts/check-deps.sh
+
+compile-cuda-kernels: ## Compile CUDA kernels only (for development)
+	@./scripts/compile-cuda-kernels.sh
 
 install-deps: ## Install missing dependencies
 	@./scripts/check-deps.sh --install
