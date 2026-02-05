@@ -19,7 +19,8 @@ func NewCustomEngine(modelPath string, opts LoadOptions) (*CustomEngine, error) 
 	// Parse device option
 	var device tensor.Device
 	switch opts.Device {
-	case "gpu":
+	case "gpu", "cuda", "metal":
+		// GPU, CUDA, and Metal all map to tensor.GPU
 		device = tensor.GPU
 	case "cpu":
 		device = tensor.CPU

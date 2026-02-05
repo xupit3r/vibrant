@@ -49,7 +49,12 @@ func (t *Tensor) toGPU() (*Tensor, error) {
 	}
 
 	// Copy data to GPU
-	dataBytes := (*[1 << 30]byte)(unsafe.Pointer(&dataSlice[0]))[:bufferSize:bufferSize]
+	// Use unsafe.Slice for proper handling of large tensors (Go 1.17+)
+	if len(dataSlice) == 0 {
+		return nil, fmt.Errorf("cannot copy empty tensor to GPU")
+	}
+	dataBytes := unsafe.Slice((*byte)(unsafe.Pointer(&dataSlice[0])), bufferSize)
+	
 	if err := buf.CopyFromHost(dataBytes); err != nil {
 		buf.Free()
 		return nil, fmt.Errorf("failed to copy data to CUDA GPU: %w", err)
@@ -87,7 +92,10 @@ func (t *Tensor) toCPU() (*Tensor, error) {
 	}
 
 	bufferSize := int64(len(dataSlice) * 4)
-	dataBytes := (*[1 << 30]byte)(unsafe.Pointer(&dataSlice[0]))[:bufferSize:bufferSize]
+	if len(dataSlice) == 0 {
+		return nil, fmt.Errorf("cannot copy empty tensor from GPU")
+	}
+	dataBytes := unsafe.Slice((*byte)(unsafe.Pointer(&dataSlice[0])), bufferSize)
 
 	// Copy data from GPU
 	if err := t.gpuBuffer.CopyToHost(dataBytes); err != nil {

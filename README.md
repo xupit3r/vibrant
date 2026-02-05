@@ -80,11 +80,13 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 
 **CUDA GPU Backend for NVIDIA GPUs (Linux)**:
 - Full feature parity with Metal (11 kernels)
+- **Automatic quantized model support** (Q4_K, Q5_K, Q6_K → Float32 dequantization)
 - Direct CGO bindings to CUDA Runtime API
 - Pre-compiled kernels with nvcc
 - Buffer pooling for efficient memory reuse
 - CLI device selection: `vibrant chat --device cuda`
 - Expected 10-15x speedup on large operations (RTX 4090)
+- Works with all existing quantized models (automatic dequantization)
 - Setup guide: [docs/setup/cuda-setup.md](docs/setup/cuda-setup.md)
 
 **Performance Benchmarks**:
@@ -102,6 +104,7 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 vibrant ask --device metal "your question"
 
 # Use CUDA GPU acceleration (Linux with NVIDIA)
+# Works with quantized models (Q4_K, Q5_K, Q6_K) - automatically dequantizes to Float32
 vibrant ask --device cuda "your question"
 
 # Use CPU (default, compatible everywhere)
@@ -110,6 +113,8 @@ vibrant ask --device cpu "your question"
 # Auto-detect and use best device
 vibrant ask --device auto "your question"
 ```
+
+**Note on Quantized Models**: When using GPU acceleration with quantized models (Q4_K_M, Q5_K_M, Q6_K), the models are automatically dequantized to Float32 during GPU transfer. This provides full GPU acceleration while working with all existing quantized models, at the cost of ~4x more VRAM usage than the quantized size.
 
 ### Key Capabilities
 

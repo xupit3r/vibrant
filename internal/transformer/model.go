@@ -22,6 +22,9 @@ type Model struct {
 
 	// Output projection (language modeling head)
 	outputWeight *tensor.Tensor // [hidden_dim, vocab_size]
+
+	// Target device for computation (CPU or GPU)
+	device tensor.Device
 }
 
 // NewModel creates a complete model from GGUF file
@@ -95,6 +98,9 @@ func NewModel(ggufFile *gguf.GGUFFile) (*Model, error) {
 
 // MoveToDevice moves all model weights to the specified device (CPU or GPU)
 func (m *Model) MoveToDevice(device tensor.Device) error {
+	// Store target device
+	m.device = device
+
 	// Move embeddings
 	if err := m.embeddings.MoveToDevice(device); err != nil {
 		return fmt.Errorf("failed to move embeddings to device: %w", err)
@@ -145,6 +151,15 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	hidden, err := m.embeddings.Forward(tokenIDs)
 	if err != nil {
 		return nil, fmt.Errorf("embeddings failed: %w", err)
+	}
+
+	// Move embeddings to GPU if model is on GPU
+	// (embeddings are computed on CPU and need to be transferred)
+	if m.device == tensor.GPU {
+		hidden, err = hidden.ToDevice(tensor.GPU)
+		if err != nil {
+			return nil, fmt.Errorf("failed to move embeddings to GPU: %w", err)
+		}
 	}
 
 	// 2. Pass through all transformer layers

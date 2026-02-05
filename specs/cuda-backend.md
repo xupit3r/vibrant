@@ -39,8 +39,11 @@ The CUDA backend is selected via the `--device` flag:
 ```bash
 vibrant chat --device cuda    # Explicit CUDA
 vibrant chat --device gpu     # Auto-selects CUDA on Linux
+vibrant chat --device metal   # Maps to CUDA on Linux
 vibrant chat --device auto    # Auto-detects (CUDA if available)
 ```
+
+**Note**: The device mapping was fixed to properly recognize `cuda` and `metal` device flags. Previously, only `gpu` was recognized, causing `--device cuda` to silently fall back to CPU.
 
 ### Build System
 
@@ -358,13 +361,47 @@ if err != nil {
 3. **Out of memory**: Insufficient GPU memory
 4. **Kernel launch failed**: Invalid parameters or compilation error
 
+## Quantized Model Support
+
+**Status**: ⚠️ Experimental - Model loads to GPU but inference currently hangs
+
+The CUDA backend now includes automatic dequantization for quantized models (Q4_K, Q5_K, Q6_K):
+
+### Current State
+
+**✅ Working**:
+- Automatic dequantization (Q4_K/Q5_K/Q6_K → Float32)
+- GPU memory allocation (12.7GB for 3B model on RTX 4090)
+- CUDA device detection and initialization
+- Model transfer to GPU (verified via nvidia-smi)
+
+**❌ Not Working**:
+- Inference hangs at first forward pass
+- CUDA kernels appear to deadlock
+- Requires debugging of kernel launch/synchronization
+
+### Usage (Experimental)
+
+```bash
+# Currently hangs during inference
+vibrant chat --device cuda --model qwen2.5-coder-3b-q4
+
+# Workaround: Use CPU inference (fully functional)
+vibrant chat --device cpu --model qwen2.5-coder-3b-q4
+```
+
+### Technical Details
+
+See `docs/implementation/GPU_DEQUANT_STATUS.md` for detailed status and debugging information.
+
 ## Limitations
 
 1. **Platform**: Linux only (no Windows support yet)
 2. **Compute Capability**: Requires sm_86+ (RTX 30/40 series)
-3. **Precision**: Float32 only (no INT8/FP16 quantization yet)
+3. **Quantization**: Dequantizes to Float32 (uses more VRAM than CPU)
 4. **Batch Size**: Limited by GPU memory
 5. **Build Complexity**: Requires CUDA toolkit and nvcc at build time
+6. **Dequantization Overhead**: 2-5 second one-time cost at model load
 
 ## Future Enhancements
 

@@ -21,13 +21,18 @@ func (t *Tensor) ToDevice(targetDevice Device) (*Tensor, error) {
 		return t, nil
 	}
 
-	// Only support Float32 on GPU for now
-	if targetDevice == GPU && t.dtype != Float32 {
-		return nil, fmt.Errorf("GPU only supports Float32 tensors (got %v)", t.dtype)
-	}
-
-	// Moving to GPU
+	// Moving to GPU: dequantize if needed
 	if targetDevice == GPU {
+		// If tensor is quantized, dequantize to Float32 first
+		if t.dtype != Float32 {
+			fmt.Printf("Dequantizing %s tensor to Float32 for GPU transfer...\n", t.dtype)
+			dequantized, err := t.dequantizeForGPU()
+			if err != nil {
+				return nil, fmt.Errorf("failed to dequantize for GPU: %w", err)
+			}
+			// Move the dequantized tensor to GPU
+			return dequantized.toGPU()
+		}
 		return t.toGPU()
 	}
 
@@ -37,6 +42,23 @@ func (t *Tensor) ToDevice(targetDevice Device) (*Tensor, error) {
 	}
 
 	return nil, fmt.Errorf("unsupported device: %v", targetDevice)
+}
+
+// dequantizeForGPU dequantizes a quantized tensor to Float32
+func (t *Tensor) dequantizeForGPU() (*Tensor, error) {
+	switch t.dtype {
+	case Q4_K:
+		return DequantizeQ4_KTensor(t)
+	case Q5_K:
+		return DequantizeQ5_KTensor(t)
+	case Q6_K:
+		return DequantizeQ6_KTensor(t)
+	case Float32:
+		// Already Float32, return as-is
+		return t, nil
+	default:
+		return nil, fmt.Errorf("unsupported quantization format for GPU: %v", t.dtype)
+	}
 }
 
 // toGPU moves the tensor to GPU
@@ -83,7 +105,10 @@ func (t *Tensor) toGPU() (*Tensor, error) {
 	}
 
 	// Copy data to GPU
-	dataBytes := (*[1 << 30]byte)(unsafe.Pointer(&dataSlice[0]))[:bufferSize:bufferSize]
+	if len(dataSlice) == 0 {
+		return nil, fmt.Errorf("cannot copy empty tensor to GPU")
+	}
+	dataBytes := unsafe.Slice((*byte)(unsafe.Pointer(&dataSlice[0])), bufferSize)
 	if err := buf.CopyFromHost(dataBytes); err != nil {
 		buf.Free()
 		return nil, fmt.Errorf("failed to copy data to GPU: %w", err)
@@ -120,7 +145,10 @@ func (t *Tensor) toCPU() (*Tensor, error) {
 	cpuData := make([]float32, size/4)
 
 	// Copy from GPU
-	dataBytes := (*[1 << 30]byte)(unsafe.Pointer(&cpuData[0]))[:size:size]
+	if len(cpuData) == 0 {
+		return nil, fmt.Errorf("cannot copy empty tensor from GPU")
+	}
+	dataBytes := unsafe.Slice((*byte)(unsafe.Pointer(&cpuData[0])), size)
 	if err := t.gpuBuffer.CopyToHost(dataBytes); err != nil {
 		return nil, fmt.Errorf("failed to copy from GPU: %w", err)
 	}

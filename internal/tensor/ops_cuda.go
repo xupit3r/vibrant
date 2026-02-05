@@ -73,17 +73,17 @@ func matmulGPU(a, b *Tensor) *Tensor {
 	}
 
 	if launchErr != nil {
-		fmt.Printf("CUDA MatMul: kernel launch failed: %v\n", launchErr)
 		outputBuf.Free()
 		return nil
 	}
 
 	// Sync to ensure completion
 	if err := cudaDev.Sync(); err != nil {
-		fmt.Printf("CUDA MatMul: sync failed: %v\n", err)
 		outputBuf.Free()
 		return nil
 	}
+
+	fmt.Printf("[DEBUG] CUDA MatMul: sync completed\n")
 
 	// Create output tensor
 	outputData := make([]float32, M*N) // Keep CPU copy
