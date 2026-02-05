@@ -707,7 +707,7 @@ See `docs/results/GPU_VALIDATION_RESULTS.md` for detailed performance analysis.
 - [x] Normalization kernels (softmax, RMS norm, batched variants)
 - [x] Element-wise operations (add, mul, mul_scalar, SiLU, copy)
 - [x] Device selection integration (explicit `--device cuda` flag)
-- [ ] Testing & validation (correctness, performance benchmarks) **Requires CUDA hardware**
+- [x] Testing & validation (correctness, performance benchmarks) ✅ **Validated on RTX 4090**
 - [x] Documentation (specs, setup guide, results)
 
 **Implementation Completed**:
@@ -717,31 +717,35 @@ See `docs/results/GPU_VALIDATION_RESULTS.md` for detailed performance analysis.
 - Full feature parity with Metal (11 kernels, buffer pooling)
 - CLI device selection with `--device cuda` flag
 - Complete tensor integration with automatic GPU dispatch
+- Fixed build tag bugs: pool_stub.go, tensor_gpu_stub.go excluded linux+cgo
+- Added tensor_cuda_api.go for public ToDevice/IsOnGPU/FreeGPU/SyncGPU on Linux
+- Made BufferPool device-agnostic via directAllocator interface
 
-**Expected Performance** (RTX 4090):
-- Large operations: 10-15x speedup vs CPU
-- Medium operations: 8-12x speedup vs CPU
-- Full inference: 3-5x end-to-end speedup
+**Validated Performance** (RTX 4090, 24 GB VRAM):
+- All 11 CUDA tensor tests passing (device access, memory, round-trip, Add, Mul, MatMul, Softmax, SiLU)
+- GPU/CPU numerical consistency verified (tolerance < 1e-4)
+- Buffer pool working correctly (9/10 pool hits on reuse cycles)
 
 **Deliverable**: ✅ NVIDIA GPU acceleration for Linux with device selection
 
 **Documentation**:
 - Spec: `specs/cuda-backend.md`
 - Setup: `docs/setup/cuda-setup.md`
-- Session summary: `~/.copilot/session-state/.../session-summary.md`
+- Validation: `docs/results/CUDA_VALIDATION_RESULTS.md`
 
 **Commits**:
 - 7a105a6: Kernel launch infrastructure
 - c0b4ef5: Tensor integration
 - 52134ac: Device selection CLI
-- [Current]: CUDA build fixes (kernel parameter matching, CUDA path support, uintptr→unsafe.Pointer conversion)
+- f4bb719: CUDA build fixes (kernel parameter matching, CUDA path support, uintptr→unsafe.Pointer conversion)
 
 **Recent Updates** (February 5, 2026):
-- ✅ Fixed CUDA kernel launch parameter mismatch (softmax_batched_f32, rms_norm_batched_f32)
-- ✅ Added support for `/opt/cuda` paths alongside `/usr/local/cuda`
-- ✅ Fixed type conversion issues (uintptr → unsafe.Pointer) in tensor ops
-- ✅ Fixed build tag conflicts in GPU stub files
-- ✅ Verified `make build-cuda` now completes successfully
+- ✅ Fixed build tag bugs in pool_stub.go and tensor_gpu_stub.go (excluded linux+cgo)
+- ✅ Added tensor_cuda_api.go (wires ToDevice/IsOnGPU/FreeGPU/SyncGPU for Linux)
+- ✅ Made BufferPool work on Linux (was darwin-only, now uses directAllocator interface)
+- ✅ Fixed PoolStats field name mismatches in cuda_test.go and cuda_bench_test.go
+- ✅ Added 11 comprehensive CUDA tensor tests (tensor_cuda_test.go)
+- ✅ All tests validated on NVIDIA GeForce RTX 4090 (24 GB VRAM)
 
 ### Vision
 Enable Vibrant to leverage GPU compute and run models larger than available memory through intelligent offloading, based on research from the SpecExec paper (NeurIPS 2024).

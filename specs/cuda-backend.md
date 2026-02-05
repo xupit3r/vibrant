@@ -27,7 +27,9 @@ internal/gpu/
 
 internal/tensor/
 ├── ops_cuda.go        # CUDA tensor operations (matmul, softmax, etc.)
-└── tensor_cuda.go     # Device transfer logic (toGPU, toCPU)
+├── tensor_cuda.go     # Device transfer logic (toGPU, toCPU)
+├── tensor_cuda_api.go # Public GPU API (ToDevice, IsOnGPU, FreeGPU, SyncGPU)
+└── tensor_cuda_test.go # CUDA validation tests (11 tests)
 ```
 
 ### Device Selection
@@ -323,7 +325,8 @@ package cuda
 **Build tag logic**:
 - `linux,cgo`: CUDA implementation (requires CUDA toolkit)
 - `darwin,cgo`: Metal implementation (macOS only)
-- `!linux !darwin !cgo`: Stub implementation (fallback)
+- `(darwin OR linux),cgo`: Shared code (BufferPool)
+- Stubs: Active when neither `linux,cgo` nor `darwin,cgo` (uses two-line exclusion pattern)
 
 ## Error Handling
 

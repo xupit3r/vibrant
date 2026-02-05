@@ -28,8 +28,8 @@ func BenchmarkCUDAAllocation(b *testing.B) {
 	b.StopTimer()
 
 	stats := dev.PoolStats()
-	b.ReportMetric(float64(stats.Hits), "pool-hits")
-	b.ReportMetric(float64(stats.Misses), "pool-misses")
+	b.ReportMetric(float64(stats.PoolHits), "pool-hits")
+	b.ReportMetric(float64(stats.PoolMisses), "pool-misses")
 	b.ReportMetric(float64(stats.Evictions), "pool-evictions")
 }
 

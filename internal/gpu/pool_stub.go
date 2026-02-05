@@ -1,3 +1,4 @@
+// +build !linux !cgo
 // +build !darwin !cgo
 
 package gpu

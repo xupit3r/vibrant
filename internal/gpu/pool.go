@@ -1,4 +1,5 @@
-// +build darwin,cgo
+// +build darwin linux
+// +build cgo
 
 package gpu
 
@@ -105,12 +106,17 @@ func (p *BufferPool) Allocate(size int64) (Buffer, error) {
 	return poolBuf, nil
 }
 
+// directAllocator is implemented by devices that support direct (non-pooled) allocation
+type directAllocator interface {
+	allocateDirect(size int64) (Buffer, error)
+}
+
 // allocateDirect calls the device's direct allocation method
 func (p *BufferPool) allocateDirect(size int64) (Buffer, error) {
-	if metalDev, ok := p.device.(*MetalDevice); ok {
-		return metalDev.allocateDirect(size)
+	if da, ok := p.device.(directAllocator); ok {
+		return da.allocateDirect(size)
 	}
-	// For other device types, just call Allocate
+	// Fallback for devices without direct allocation
 	return p.device.Allocate(size)
 }
 

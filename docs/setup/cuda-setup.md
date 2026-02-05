@@ -294,16 +294,72 @@ vibrant generate --device cuda --model qwen-2.5-coder-3b \
     --prompt "Write a function that"
 ```
 
+## Testing
+
+### Run CUDA Tests
+
+```bash
+# Compile CUDA kernels first
+./scripts/compile-cuda-kernels.sh
+
+# Run CUDA tensor tests (11 tests: device access, memory, round-trip, ops)
+CGO_ENABLED=1 \
+  CGO_LDFLAGS="-L$(pwd)/build/cuda -lvibrant_cuda -L/opt/cuda/lib64 -lcudart" \
+  LD_LIBRARY_PATH="$(pwd)/build/cuda:/opt/cuda/lib64:$LD_LIBRARY_PATH" \
+  go test -v -run "TestCUDA" ./internal/tensor/
+
+# Run GPU device-level tests
+CGO_ENABLED=1 \
+  CGO_LDFLAGS="-L$(pwd)/build/cuda -lvibrant_cuda -L/opt/cuda/lib64 -lcudart" \
+  LD_LIBRARY_PATH="$(pwd)/build/cuda:/opt/cuda/lib64:$LD_LIBRARY_PATH" \
+  go test -v ./internal/gpu/
+```
+
+**Expected output** (RTX 4090):
+```
+=== RUN   TestCUDADeviceAccess
+    tensor_cuda_test.go:34: CUDA device: NVIDIA GeForce RTX 4090
+    tensor_cuda_test.go:40: GPU memory: 981 MB used / 24079 MB total
+--- PASS: TestCUDADeviceAccess
+=== RUN   TestCUDAMemoryAllocation
+--- PASS: TestCUDAMemoryAllocation
+=== RUN   TestCUDATensorRoundTrip
+--- PASS: TestCUDATensorRoundTrip
+=== RUN   TestCUDAAddGPU
+--- PASS: TestCUDAAddGPU
+=== RUN   TestCUDAMulGPU
+--- PASS: TestCUDAMulGPU
+=== RUN   TestCUDAMatMulSingleRow
+--- PASS: TestCUDAMatMulSingleRow
+=== RUN   TestCUDAMatMulGeneral
+--- PASS: TestCUDAMatMulGeneral
+=== RUN   TestCUDASoftmax
+--- PASS: TestCUDASoftmax
+=== RUN   TestCUDASiLU
+--- PASS: TestCUDASiLU
+=== RUN   TestCUDAGPUCPUConsistency
+--- PASS: TestCUDAGPUCPUConsistency
+=== RUN   TestCUDALargerMatMul
+--- PASS: TestCUDALargerMatMul
+PASS
+```
+
 ## Benchmarking
 
 ### Test GPU Performance
 
 ```bash
 # Build with benchmarks
-go test ./internal/gpu -bench=BenchmarkCUDA -benchmem -benchtime=3s -tags cuda
+CGO_ENABLED=1 \
+  CGO_LDFLAGS="-L$(pwd)/build/cuda -lvibrant_cuda -L/opt/cuda/lib64 -lcudart" \
+  LD_LIBRARY_PATH="$(pwd)/build/cuda:/opt/cuda/lib64:$LD_LIBRARY_PATH" \
+  go test ./internal/gpu -bench=BenchmarkCUDA -benchmem -benchtime=3s
 
 # Compare CPU vs CUDA
-go test ./internal/tensor -bench=BenchmarkMatMul -benchmem -tags cuda
+CGO_ENABLED=1 \
+  CGO_LDFLAGS="-L$(pwd)/build/cuda -lvibrant_cuda -L/opt/cuda/lib64 -lcudart" \
+  LD_LIBRARY_PATH="$(pwd)/build/cuda:/opt/cuda/lib64:$LD_LIBRARY_PATH" \
+  go test ./internal/tensor -bench=BenchmarkMatMul -benchmem
 ```
 
 **Expected results**:

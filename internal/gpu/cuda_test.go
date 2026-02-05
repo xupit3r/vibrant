@@ -230,13 +230,13 @@ func TestCUDABufferPool(t *testing.T) {
 	stats2 := dev.PoolStats()
 	
 	// Should have a cache hit
-	if stats2.Hits <= stats1.Hits {
-		t.Logf("Warning: Expected cache hit (hits before=%d, after=%d)", stats1.Hits, stats2.Hits)
+	if stats2.PoolHits <= stats1.PoolHits {
+		t.Logf("Warning: Expected cache hit (hits before=%d, after=%d)", stats1.PoolHits, stats2.PoolHits)
 		// Note: This might not always hit due to size bucketing, so just log as warning
 	}
 
 	t.Logf("Pool stats: hits=%d, misses=%d, evictions=%d", 
-		stats2.Hits, stats2.Misses, stats2.Evictions)
+		stats2.PoolHits, stats2.PoolMisses, stats2.Evictions)
 }
 
 func TestCUDABufferPoolReuse(t *testing.T) {
@@ -277,12 +277,12 @@ func TestCUDABufferPoolReuse(t *testing.T) {
 
 	t.Logf("After %d alloc/free cycles:", numBuffers)
 	t.Logf("  Pool stats: hits=%d, misses=%d, evictions=%d",
-		stats.Hits, stats.Misses, stats.Evictions)
+		stats.PoolHits, stats.PoolMisses, stats.Evictions)
 	t.Logf("  Pool memory: pooled=%d MB, active=%d MB",
 		pooled/(1024*1024), active/(1024*1024))
 
 	// Should have some cache hits from reuse
-	if stats.Hits == 0 && numBuffers > 1 {
+	if stats.PoolHits == 0 && numBuffers > 1 {
 		t.Logf("Warning: Expected some cache hits with %d allocations", numBuffers)
 	}
 }
@@ -311,7 +311,7 @@ func TestCUDABufferPoolPressure(t *testing.T) {
 		}
 		buffers = append(buffers, buf)
 
-		pooled, active, _ := dev.PoolMemoryUsage()
+		_, active, _ := dev.PoolMemoryUsage()
 		if active > maxPool {
 			t.Logf("Active memory (%d) exceeded pool max (%d) at %d buffers",
 				active, maxPool, len(buffers))
@@ -327,5 +327,5 @@ func TestCUDABufferPoolPressure(t *testing.T) {
 	stats := dev.PoolStats()
 	t.Logf("Pool pressure test: allocated %d buffers", len(buffers))
 	t.Logf("  Stats: hits=%d, misses=%d, evictions=%d",
-		stats.Hits, stats.Misses, stats.Evictions)
+		stats.PoolHits, stats.PoolMisses, stats.Evictions)
 }

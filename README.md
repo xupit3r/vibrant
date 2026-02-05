@@ -27,13 +27,13 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 
 ✅ **Feature Complete** - Agentic code assistant with GPU acceleration!
 
-**Current Phase**: Phase 11.3 - CUDA GPU Support ✅ **COMPLETE** (Testing requires CUDA hardware)
+**Current Phase**: Phase 11.3 - CUDA GPU Support ✅ **COMPLETE** (Validated on RTX 4090)
 
 **GPU Backend**:
 - ✅ Phase 11.1: Metal GPU support for Apple Silicon (complete)
-- ✅ Phase 11.3: NVIDIA CUDA support for Linux (complete, testing pending)
+- ✅ Phase 11.3: NVIDIA CUDA support for Linux (complete, validated on RTX 4090)
 - ✅ Metal GPU backend for Apple Silicon (6.4x speedup)
-- ✅ CUDA GPU backend for NVIDIA GPUs on Linux (10-15x speedup)
+- ✅ CUDA GPU backend for NVIDIA GPUs on Linux (validated on RTX 4090)
 - ✅ Device abstraction layer (CPU/GPU/Metal/CUDA)
 - ✅ 11 GPU kernels: MatMul, Softmax, RMSNorm, element-wise ops
 - ✅ Tensor device migration (CPU ↔ GPU)
@@ -235,7 +235,7 @@ vibrant ask --context ./src "How does authentication work?"
 
 GPU acceleration is available on multiple platforms:
 - **Apple Silicon (M-series)**: Metal GPU backend (6.4x speedup)
-- **Linux with NVIDIA**: CUDA GPU backend (10-15x speedup expected on RTX 4090)
+- **Linux with NVIDIA**: CUDA GPU backend (validated on RTX 4090, 24 GB VRAM)
 
 ```bash
 # Automatic device selection (tries GPU, falls back to CPU)
@@ -311,7 +311,7 @@ make build-mock
 
 **GPU Support**:
 - **Metal (macOS)**: Use `make build-gpu` on Apple Silicon for 6.4x speedup on large ops
-- **CUDA (Linux)**: Use `make build-cuda` with NVIDIA GPU (RTX 30/40 series) for 10-15x speedup
+- **CUDA (Linux)**: Use `make build-cuda` with NVIDIA GPU (RTX 30/40 series, validated on RTX 4090)
   - Requires CUDA Toolkit 12.0+ and NVIDIA Driver 525.60.13+
   - See [docs/setup/cuda-setup.md](docs/setup/cuda-setup.md) for setup
 
