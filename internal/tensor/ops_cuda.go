@@ -395,6 +395,16 @@ func mulGPU(a, b *Tensor) *Tensor {
 	return outputTensor
 }
 
+// RMSNormGPU is an exported wrapper for rmsNormGPU
+func RMSNormGPU(input, weight *Tensor, eps float32) *Tensor {
+	return rmsNormGPU(input, weight, eps)
+}
+
+// SoftmaxGPU is an exported wrapper for softmaxGPU
+func SoftmaxGPU(input *Tensor) *Tensor {
+	return softmaxGPU(input)
+}
+
 // siluGPU performs SiLU activation on GPU using CUDA
 func siluGPU(input *Tensor) *Tensor {
 	if !input.IsOnGPU() || input.dtype != Float32 {

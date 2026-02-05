@@ -46,7 +46,29 @@ func (r *RMSNorm) Forward(x *tensor.Tensor) (*tensor.Tensor, error) {
 		return nil, fmt.Errorf("weight dim %d != hidden dim %d", r.weight.Shape()[0], hiddenDim)
 	}
 
-	// Create output tensor
+	// Try GPU path first (if input is on GPU)
+	if x.IsOnGPU() {
+		// Move weight to GPU if needed
+		weightGPU := r.weight
+		if !weightGPU.IsOnGPU() {
+			var err error
+			weightGPU, err = r.weight.ToDevice(tensor.GPU)
+			if err != nil {
+				// Fall back to CPU if GPU transfer fails
+				goto cpuPath
+			}
+		}
+		
+		// Use GPU RMSNorm
+		output := tensor.RMSNormGPU(x, weightGPU, float32(r.eps))
+		if output != nil {
+			return output, nil
+		}
+		// Fall through to CPU if GPU fails
+	}
+
+cpuPath:
+	// Create output tensor on CPU
 	output := tensor.NewTensor(shape, tensor.Float32)
 
 	xData := x.Data().([]float32)

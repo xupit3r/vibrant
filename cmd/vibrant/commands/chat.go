@@ -99,7 +99,7 @@ func runChat(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create assistant
-	asst, err := assistant.NewAssistant(modelMgr, assistant.AssistantConfig{
+	asst, err := assistant.NewAssistantWithDevice(modelMgr, assistant.AssistantConfig{
 		ModelID:          selectedModel.ID,
 		TemplateName:     "default",
 		MaxHistory:       20,
@@ -108,7 +108,7 @@ func runChat(cmd *cobra.Command, args []string) error {
 		AutoSave:         false,
 		MaxContextTokens: 3000,
 		ContextStrategy:  "smart",
-	})
+	}, device)
 	if err != nil {
 		return fmt.Errorf("failed to create assistant: %w", err)
 	}

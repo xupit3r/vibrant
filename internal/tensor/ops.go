@@ -290,7 +290,17 @@ func GELU(a *Tensor) *Tensor {
 }
 
 // SiLU applies SiLU (Swish) activation: x * sigmoid(x)
+// Supports GPU acceleration when tensor is on GPU
 func SiLU(a *Tensor) *Tensor {
+	// Try GPU path first
+	if a.IsOnGPU() {
+		result := siluGPU(a)
+		if result != nil {
+			return result
+		}
+	}
+
+	// CPU fallback
 	result := NewTensor(a.shape, a.dtype)
 
 	switch a.dtype {
@@ -328,6 +338,15 @@ func Sigmoid(a *Tensor) *Tensor {
 
 // Softmax applies softmax activation along the last dimension
 func Softmax(a *Tensor) *Tensor {
+	// Try GPU path first
+	if a.IsOnGPU() {
+		result := softmaxGPU(a)
+		if result != nil {
+			return result
+		}
+	}
+
+	// CPU fallback
 	result := NewTensor(a.shape, a.dtype)
 
 	switch a.dtype {

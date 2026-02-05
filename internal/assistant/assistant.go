@@ -47,8 +47,18 @@ func DefaultAssistantConfig() AssistantConfig {
 
 // NewAssistant creates a new assistant
 func NewAssistant(modelManager *model.Manager, config AssistantConfig) (*Assistant, error) {
+	return NewAssistantWithDevice(modelManager, config, "auto")
+}
+
+// NewAssistantWithDevice creates a new assistant with a specific device
+func NewAssistantWithDevice(modelManager *model.Manager, config AssistantConfig, device string) (*Assistant, error) {
 	// Initialize LLM manager
 	llmManager := llm.NewManager(modelManager)
+	
+	// Set device in load options
+	loadOpts := llm.DefaultLoadOptions()
+	loadOpts.Device = device
+	llmManager.SetLoadOptions(loadOpts)
 	
 	// Load model
 	if err := llmManager.LoadModel(config.ModelID); err != nil {
