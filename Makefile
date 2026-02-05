@@ -94,13 +94,18 @@ clean: ## Clean build artifacts
 
 test: ## Run tests
 	@echo "Running tests..."
-	@go test -v ./...
+	@CGO_ENABLED=0 go test -v ./...
 
 test-coverage: ## Run tests with coverage
 	@echo "Running tests with coverage..."
-	@go test -v -coverprofile=coverage.out ./...
+	@CGO_ENABLED=0 go test -v -coverprofile=coverage.out ./...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
+
+test-cuda: ## Run CUDA GPU tests (requires CUDA toolkit)
+	@echo "Running CUDA GPU tests..."
+	@echo "⚠️  Requires: CUDA Toolkit 12.0+, NVIDIA GPU, and Driver 525.60.13+"
+	@CGO_ENABLED=1 go test -v ./internal/gpu -run TestCUDA
 
 install: build ## Install binary to GOPATH/bin (with custom pure Go engine)
 	@echo "Installing $(BINARY_NAME) with custom pure Go engine..."
@@ -132,15 +137,20 @@ lint: ## Run linter
 
 bench: ## Run benchmarks
 	@echo "Running benchmarks..."
-	@go test ./internal/... -bench=. -benchmem -benchtime=3s
+	@CGO_ENABLED=0 go test ./internal/... -bench=. -benchmem -benchtime=3s
 
 bench-tensor: ## Run tensor benchmarks only
 	@echo "Running tensor benchmarks..."
-	@go test ./internal/tensor -bench=. -benchmem -benchtime=5s
+	@CGO_ENABLED=0 go test ./internal/tensor -bench=. -benchmem -benchtime=5s
 
 bench-inference: ## Run inference benchmarks (requires test model)
 	@echo "Running inference benchmarks..."
-	@go test ./internal/inference -bench=. -benchmem -benchtime=3s
+	@CGO_ENABLED=0 go test ./internal/inference -bench=. -benchmem -benchtime=3s
+
+bench-cuda: ## Run CUDA GPU benchmarks (requires CUDA toolkit)
+	@echo "Running CUDA GPU benchmarks..."
+	@echo "⚠️  Requires: CUDA Toolkit 12.0+, NVIDIA GPU, and Driver 525.60.13+"
+	@CGO_ENABLED=1 go test ./internal/gpu -bench=BenchmarkCUDA -benchmem -benchtime=3s
 
 bench-compare: ## Run benchmarks and compare with baseline
 	@echo "Running benchmarks and comparing..."
