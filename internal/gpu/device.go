@@ -71,8 +71,13 @@ func GetDevice(dtype DeviceType) (Device, error) {
 	case DeviceTypeCPU:
 		return NewCPUDevice(), nil
 	case DeviceTypeGPU:
+		// Try Metal on macOS
 		if runtime.GOOS == "darwin" {
 			return NewMetalDevice()
+		}
+		// Try CUDA on Linux
+		if runtime.GOOS == "linux" {
+			return NewCUDADevice()
 		}
 		return nil, fmt.Errorf("GPU not supported on %s", runtime.GOOS)
 	default:

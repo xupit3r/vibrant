@@ -43,6 +43,15 @@ build-gpu: ## Build with GPU support (requires macOS and CGO for Metal)
 	@echo "💡 This build includes Metal GPU acceleration for Apple Silicon"
 	@echo "   Use --device gpu flag to enable GPU acceleration"
 
+build-cuda: ## Build with CUDA GPU support (requires Linux, NVIDIA GPU, and CUDA toolkit)
+	@echo "Building $(BINARY_NAME) with CUDA GPU support..."
+	@CGO_ENABLED=1 go build $(LDFLAGS) -o $(BINARY_NAME) $(CMD_DIR)
+	@echo "✅ Build complete: ./$(BINARY_NAME) (with CUDA GPU support)"
+	@echo ""
+	@echo "💡 This build includes CUDA GPU acceleration for NVIDIA GPUs"
+	@echo "   Requires: CUDA Toolkit 12.0+, NVIDIA Driver 525.60.13+"
+	@echo "   Use --device cuda flag to enable CUDA acceleration"
+
 build-llama: ## Build with llama.cpp inference (requires C++ compiler and CGO)
 	@echo "Building $(BINARY_NAME) with llama.cpp..."
 	@$(CGO_FLAGS_LLAMA) go build $(BUILD_TAGS_LLAMA) $(LDFLAGS) -o $(BINARY_NAME) $(CMD_DIR)
