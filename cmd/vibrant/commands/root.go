@@ -12,6 +12,7 @@ var (
 cfgFile string
 verbose bool
 quiet   bool
+device  string
 )
 
 // rootCmd represents the base command
@@ -39,11 +40,13 @@ rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (defaul
 rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet mode")
 rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output")
+rootCmd.PersistentFlags().StringVar(&device, "device", "auto", "compute device: auto, cpu, gpu, metal, cuda")
 
 // Bind flags to viper
 viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 viper.BindPFlag("quiet", rootCmd.PersistentFlags().Lookup("quiet"))
 viper.BindPFlag("no-color", rootCmd.PersistentFlags().Lookup("no-color"))
+viper.BindPFlag("device", rootCmd.PersistentFlags().Lookup("device"))
 }
 
 // initConfig reads in config file and ENV variables
