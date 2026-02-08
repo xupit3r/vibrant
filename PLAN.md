@@ -697,7 +697,7 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 
 See `docs/results/GPU_VALIDATION_RESULTS.md` for detailed performance analysis.
 
-### Phase 11.3: NVIDIA CUDA GPU Support ✅ COMPLETE
+### Phase 11.3: NVIDIA CUDA GPU Support ⚠️ GPU INFRASTRUCTURE COMPLETE, INFERENCE ISSUE DISCOVERED
 **Goal**: Add NVIDIA GPU support (RTX 4090) for Linux systems, matching Metal's architecture
 
 - [x] CUDA device foundation (CGO bindings, buffer management)
@@ -706,9 +706,32 @@ See `docs/results/GPU_VALIDATION_RESULTS.md` for detailed performance analysis.
 - [x] Matrix operations (matmul, matmul_single_row)
 - [x] Normalization kernels (softmax, RMS norm, batched variants)
 - [x] Element-wise operations (add, mul, mul_scalar, SiLU, copy)
+- [x] RoPE (Rotary Position Embeddings) kernel
 - [x] Device selection integration (explicit `--device cuda` flag)
+- [x] GPU tensor handling safety (EnsureCPUData checks throughout)
+- [x] SwiGLU GPU optimization (eliminate CPU transfers)
 - [x] Testing & validation (correctness, performance benchmarks) ✅ **Validated on RTX 4090**
+- [ ] **Core inference issue** - produces garbage output (NOT GPU-specific, affects CPU too)
 - [x] Documentation (specs, setup guide, results)
+
+**GPU Infrastructure Status** (2026-02-08): ✅ **COMPLETE AND CRASH-FREE**
+- All GPU tensor operations properly handle GPU↔CPU transfers
+- CUDA device singleton prevents multiple context creation
+- Lazy CPU data allocation (data=nil until needed)
+- Batched RMSNorm kernel for multi-row normalization
+- SwiGLU runs entirely on GPU
+- Test program validates GPU path executes without crashes
+
+**Core Inference Issue** (Discovered 2026-02-08): ❌ **AFFECTS BOTH CPU AND GPU**
+- **Symptom:** Repetitive garbage output ("Ġarticulate Ġontvangst Ġontvangst...")
+- **Not GPU-specific:** CPU and GPU produce identical output
+- **Likely causes:** Sampling logic, tokenizer, embeddings, or model forward pass
+- **Test Results:**
+  - Model loads: ✅ (13GB GPU / 5.5s CPU)
+  - Execution: ✅ No crashes
+  - Output quality: ❌ Repetitive garbage
+  
+**Next Steps:** Debug sampling/inference at model level (not GPU-specific)
 
 **Implementation Completed**:
 - Direct CGO bindings to CUDA Runtime API (mirrors Metal)

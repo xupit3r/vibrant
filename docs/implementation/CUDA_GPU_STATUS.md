@@ -1,13 +1,17 @@
 # CUDA GPU Support - Implementation Status
 
-**Last Updated:** 2026-02-05 19:00 UTC  
-**Status:** ⚠️ Phase 3 In Progress - Critical Bugs Discovered During Testing
+**Last Updated:** 2026-02-08 17:30 UTC  
+**Status:** ⚠️ Phase 3 - GPU Infrastructure Complete, Core Inference Issue Discovered
 
 ## Overview
 
-Phase 2 infrastructure is complete with all 12 GPU kernels implemented. However, **critical bugs were discovered during Phase 3 testing** that prevent correct inference. Model loads successfully (13.3GB VRAM), but output is incorrect. Debugging in progress.
+Phase 2 infrastructure is complete with all 12 GPU kernels implemented. GPU tensor handling has been comprehensively fixed - models load successfully on GPU, execute without crashes, and produce output. However, **a core inference quality issue affects both CPU and GPU paths identically**, producing repetitive garbage output. This is NOT a GPU-specific bug.
 
-**Current State:** Phase 3 blocked by bugs. Two bugs fixed (RoPE kernel, CPU fallback), one remaining issue under investigation.
+**Current State:** 
+- ✅ GPU infrastructure solid and crash-free
+- ✅ All tensor operations properly handle GPU↔CPU transfers
+- ✅ SwiGLU optimized for GPU acceleration
+- ❌ **Inference produces identical garbage output on CPU and GPU** (requires investigation at model/sampling level)
 
 ## ✅ Phase 1: Infrastructure (COMPLETE)
 
@@ -178,25 +182,83 @@ Phase 2 infrastructure is complete with all 12 GPU kernels implemented. However,
 - Inference starts, then hangs ❌
 - No output after 2+ minutes ❌
 
-**Possible Causes:**
-1. RoPE fix incomplete (logic error)
-2. Other tensor op has similar bug
-3. Generation loop issue
-4. Memory/transfer problem
-5. Attention mechanism bug
+## ⚠️ Phase 3: Performance Testing & Optimization (IN PROGRESS)
 
-**Next Steps:**
-- Add debug logging throughout forward pass
-- Test RoPE in isolation with known values
-- Compare GPU vs CPU outputs at each layer
-- Identify divergence point
-- Fix and verify
+**Status:** GPU infrastructure complete and crash-free. Core inference issue discovered affecting both CPU and GPU.
 
-### Immediate Goals (AFTER bug fixes)
+### GPU Tensor Handling Fixes ✅ COMPLETE (2026-02-08)
+
+**Commits:**
+- `860b492` - "fix(gpu): comprehensive GPU tensor handling and SwiGLU optimization"
+- `435b084` - "fix(gpu): revert incorrect position index changes"
+
+**Changes Made (11 files, 241 insertions, 63 deletions):**
+
+1. **CPU Fallback Safety**
+   - Added `EnsureCPUData()` to `Mul()` and `Sub()` operations
+   - Added GPU tensor checks to attention helpers (scaleScores, applyCausalMask, applySoftmax, copySlice)
+   - Added safety checks to RMSNorm CPU fallback
+   - **Result:** No more crashes when accessing GPU tensor data from CPU
+
+2. **SwiGLU GPU Optimization**
+   - Rewrote to use GPU-accelerated `SiLU()` and `Mul()` operations
+   - Eliminated unnecessary GPU→CPU→GPU transfers in feedforward network
+   - **Result:** SwiGLU now runs entirely on GPU when tensors are on GPU
+
+3. **Infrastructure Improvements**
+   - CUDA device singleton pattern (prevents multiple context creation)
+   - Lazy CPU data allocation (data=nil until `EnsureCPUData()` called)
+   - Batched RMSNorm kernel for multi-row normalization
+   - Fixed RoPE temp buffer lifecycle (free after sync)
+   - Reshape preserves GPU state (gpuBuffer, gpuDevice, gpuKernels)
+   - Fixed buffer pool eviction accounting
+
+**Test Results (Qwen 2.5 Coder 3B Q4):**
+
+| Metric | GPU | CPU |
+|--------|-----|-----|
+| Model Load Time | 12.42s | 5.51s |
+| Generation Time (20 tokens) | 41.19s | 30.74s |
+| Crashes | ✅ None | ✅ None |
+| Output Quality | ❌ Garbage | ❌ Garbage |
+
+**Test Program:** `test_gpu_inference.go` (programmatic test with timing)
+**Test Script:** `scripts/test-gpu-inference.sh` (automated with GPU monitoring)
+
+### Core Inference Issue ❌ DISCOVERED (NOT GPU-SPECIFIC)
+
+**Symptom:** 
+```
+Output: "ĠarticulateĠontvangstĠontvangstĠontvangstĠontvangst..."
+```
+
+**Key Observations:**
+- ✅ Model loads successfully on GPU (13GB for 3B model)
+- ✅ CUDA kernels execute without errors
+- ✅ No crashes or panics
+- ❌ **Identical garbage output on both CPU and GPU paths**
+- ❌ First token is reasonable ("articulate"), then gets stuck repeating "ontvangst"
+
+**This is NOT a GPU bug** - it affects CPU and GPU identically, indicating an issue in:
+- Sampling logic (stuck in loop)
+- Tokenizer decoding
+- Embeddings loading
+- Model forward pass logic
+- KV-cache state management
+
+**Next Steps for Debugging:**
+1. Investigate sampling logic - why repetition?
+2. Check tokenizer decoding
+3. Verify embeddings are loaded correctly
+4. Test with different prompts and models
+5. Add detailed logging to track logits, sampled tokens, KV-cache state
+6. Compare outputs to known-working LLM implementations
+
+### Immediate Goals (AFTER inference fix)
 1. **Verify Correct Output**
-   - Fix remaining bugs
+   - Fix sampling/inference issue
    - Generate coherent text
-   - Validate against CPU baseline
+   - Validate against known-working implementations
 
 2. **Performance Testing**
    - Run inference with GPU monitoring
