@@ -2,7 +2,6 @@ package transformer
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/xupit3r/vibrant/internal/gguf"
 	"github.com/xupit3r/vibrant/internal/tensor"
@@ -90,17 +89,13 @@ func (f *FeedForward) Forward(x *tensor.Tensor) (*tensor.Tensor, error) {
 	// Up projection: [batch*seq, intermediate_dim]
 	upProjFlat := tensor.MatMul(xFlat, f.up)
 
-	// Apply SwiGLU in-place on gateProjFlat data: swish(gate) * up
-	gData := gateProjFlat.Data().([]float32)
-	uData := upProjFlat.Data().([]float32)
-	for i := range gData {
-		// swish(x) = x * sigmoid(x) = x / (1 + exp(-x))
-		g := gData[i]
-		gData[i] = g / (1.0 + float32(math.Exp(float64(-g)))) * uData[i]
-	}
+	// Apply SwiGLU: SiLU(gate) * up
+	// This uses GPU-accelerated SiLU and Mul operations when tensors are on GPU
+	gateActivated := tensor.SiLU(gateProjFlat)
+	swiGLUResult := tensor.Mul(gateActivated, upProjFlat)
 
 	// Down projection: [batch*seq, hidden_dim]
-	outputFlat := tensor.MatMul(gateProjFlat, f.down)
+	outputFlat := tensor.MatMul(swiGLUResult, f.down)
 	output := tensor.Reshape(outputFlat, []int{batchSize, seqLen, f.hiddenDim})
 
 	return output, nil

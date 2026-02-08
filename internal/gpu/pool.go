@@ -170,9 +170,10 @@ func (p *BufferPool) evictOldest() {
 			// Remove first buffer (oldest)
 			buf := buffers[0]
 			p.pools[size] = buffers[1:]
-			p.curBytes -= size
+			p.curBytes -= buf.actualSize // Use actual size, not pool key
+			_ = size                      // pool key used only for map lookup
 			p.stats.Evictions++
-			
+
 			// Actually free the buffer
 			buf.Buffer.Free()
 			return

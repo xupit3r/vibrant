@@ -223,6 +223,13 @@ func transposeHeads(x *tensor.Tensor) *tensor.Tensor {
 	shape := x.Shape()
 	batch, seq, heads, headDim := shape[0], shape[1], shape[2], shape[3]
 
+	// Ensure CPU data is available (GPU tensors may have zeroed CPU copy)
+	if x.IsOnGPU() {
+		if _, err := x.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("transposeHeads: failed to get CPU data: %v", err))
+		}
+	}
+
 	result := tensor.NewTensor([]int{batch, heads, seq, headDim}, x.DType())
 	src := x.Data().([]float32)
 	dst := result.Data().([]float32)
@@ -244,6 +251,13 @@ func transposeHeads(x *tensor.Tensor) *tensor.Tensor {
 func transposeHeadsBack(x *tensor.Tensor) *tensor.Tensor {
 	shape := x.Shape()
 	batch, heads, seq, headDim := shape[0], shape[1], shape[2], shape[3]
+
+	// Ensure CPU data is available (GPU tensors may have zeroed CPU copy)
+	if x.IsOnGPU() {
+		if _, err := x.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("transposeHeadsBack: failed to get CPU data: %v", err))
+		}
+	}
 
 	result := tensor.NewTensor([]int{batch, seq, heads, headDim}, x.DType())
 	src := x.Data().([]float32)
@@ -270,6 +284,13 @@ func expandKVHeads(kv *tensor.Tensor, numHeads, numKVHeads int) *tensor.Tensor {
 	batch := shape[0]
 	seq := shape[2]
 	headDim := shape[3]
+
+	// Ensure CPU data is available (GPU tensors may have zeroed CPU copy)
+	if kv.IsOnGPU() {
+		if _, err := kv.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("expandKVHeads: failed to get CPU data: %v", err))
+		}
+	}
 
 	groupSize := numHeads / numKVHeads
 	result := tensor.NewTensor([]int{batch, numHeads, seq, headDim}, kv.DType())
@@ -347,6 +368,13 @@ func extractSlice(t *tensor.Tensor, batch, head int) *tensor.Tensor {
 	headDim := shape[3]
 	heads := shape[1]
 
+	// Ensure CPU data is available (GPU tensors may have zeroed CPU copy)
+	if t.IsOnGPU() {
+		if _, err := t.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("extractSlice: failed to get CPU data: %v", err))
+		}
+	}
+
 	result := tensor.NewTensor([]int{seq, headDim}, t.DType())
 	src := t.Data().([]float32)
 	dst := result.Data().([]float32)
@@ -357,6 +385,18 @@ func extractSlice(t *tensor.Tensor, batch, head int) *tensor.Tensor {
 
 // copySlice copies a [seq, head_dim] slice back to [batch, heads, seq, head_dim]
 func copySlice(src *tensor.Tensor, dst *tensor.Tensor, batch, head int) {
+	// Ensure CPU data is available (GPU tensors may have zeroed CPU copy)
+	if src.IsOnGPU() {
+		if _, err := src.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("copySlice: failed to get src CPU data: %v", err))
+		}
+	}
+	if dst.IsOnGPU() {
+		if _, err := dst.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("copySlice: failed to get dst CPU data: %v", err))
+		}
+	}
+
 	shape := src.Shape()
 	seq := shape[0]
 	headDim := shape[1]
@@ -371,6 +411,13 @@ func copySlice(src *tensor.Tensor, dst *tensor.Tensor, batch, head int) {
 
 // scaleScores scales all elements in the tensor by a factor
 func scaleScores(scores *tensor.Tensor, scale float64) {
+	// Ensure CPU data is available (GPU tensors may have zeroed CPU copy)
+	if scores.IsOnGPU() {
+		if _, err := scores.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("scaleScores: failed to get CPU data: %v", err))
+		}
+	}
+
 	data := scores.Data().([]float32)
 	s := float32(scale)
 	for i := range data {
@@ -380,6 +427,13 @@ func scaleScores(scores *tensor.Tensor, scale float64) {
 
 // applyCausalMask applies causal masking to prevent attending to future positions
 func applyCausalMask(scores *tensor.Tensor) {
+	// Ensure CPU data is available (GPU tensors may have zeroed CPU copy)
+	if scores.IsOnGPU() {
+		if _, err := scores.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("applyCausalMask: failed to get CPU data: %v", err))
+		}
+	}
+
 	shape := scores.Shape()
 	rows := shape[0]
 	cols := shape[1]
@@ -395,6 +449,13 @@ func applyCausalMask(scores *tensor.Tensor) {
 
 // applySoftmax applies softmax to each row of the scores matrix
 func applySoftmax(scores *tensor.Tensor) {
+	// Ensure CPU data is available (GPU tensors may have zeroed CPU copy)
+	if scores.IsOnGPU() {
+		if _, err := scores.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("applySoftmax: failed to get CPU data: %v", err))
+		}
+	}
+
 	shape := scores.Shape()
 	rows := shape[0]
 	cols := shape[1]
@@ -444,6 +505,18 @@ func concatenateSeqDim(cached, new *tensor.Tensor, cacheLen int) *tensor.Tensor 
 	heads := cachedShape[1]
 	newSeqLen := newShape[2]
 	headDim := cachedShape[3]
+
+	// Ensure CPU data is available (GPU tensors may have zeroed CPU copy)
+	if cached.IsOnGPU() {
+		if _, err := cached.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("concatenateSeqDim: failed to get cached CPU data: %v", err))
+		}
+	}
+	if new.IsOnGPU() {
+		if _, err := new.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("concatenateSeqDim: failed to get new CPU data: %v", err))
+		}
+	}
 
 	totalSeqLen := cacheLen + newSeqLen
 	result := tensor.NewTensor([]int{batch, heads, totalSeqLen, headDim}, cached.DType())

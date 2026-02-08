@@ -30,8 +30,23 @@ type CUDADevice struct {
 	pool     *BufferPool // Buffer pool for efficient allocation
 }
 
-// NewCUDADevice creates a new CUDA device
+// Singleton CUDA device — creating multiple CUDA contexts wastes GPU memory
+var (
+	cudaDeviceSingleton *CUDADevice
+	cudaDeviceOnce      sync.Once
+	cudaDeviceErr       error
+)
+
+// NewCUDADevice returns the singleton CUDA device (created on first call)
 func NewCUDADevice() (*CUDADevice, error) {
+	cudaDeviceOnce.Do(func() {
+		cudaDeviceSingleton, cudaDeviceErr = initCUDADevice()
+	})
+	return cudaDeviceSingleton, cudaDeviceErr
+}
+
+// initCUDADevice creates and initializes the CUDA device
+func initCUDADevice() (*CUDADevice, error) {
 	// Check if CUDA is available
 	var deviceCount C.int
 	err := C.cudaGetDeviceCount(&deviceCount)
@@ -72,8 +87,8 @@ func NewCUDADevice() (*CUDADevice, error) {
 		return nil, fmt.Errorf("failed to get memory info: %s", C.GoString(C.getCudaErrorString(err)))
 	}
 
-	// Use 80% of total memory for pool
-	poolMaxBytes := int64(total) * 8 / 10
+	// Use 90% of free memory for pool
+	poolMaxBytes := int64(free) * 9 / 10
 	dev.pool = NewBufferPool(dev, poolMaxBytes)
 
 	return dev, nil

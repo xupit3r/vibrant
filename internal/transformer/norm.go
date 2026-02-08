@@ -68,6 +68,18 @@ func (r *RMSNorm) Forward(x *tensor.Tensor) (*tensor.Tensor, error) {
 	}
 
 cpuPath:
+	// Ensure CPU data is available (GPU tensors may have zeroed CPU copy)
+	if x.IsOnGPU() {
+		if _, err := x.EnsureCPUData(); err != nil {
+			return nil, fmt.Errorf("RMSNorm: failed to get CPU data: %w", err)
+		}
+	}
+	if r.weight.IsOnGPU() {
+		if _, err := r.weight.EnsureCPUData(); err != nil {
+			return nil, fmt.Errorf("RMSNorm: failed to get weight CPU data: %w", err)
+		}
+	}
+
 	// Create output tensor on CPU
 	output := tensor.NewTensor(shape, tensor.Float32)
 

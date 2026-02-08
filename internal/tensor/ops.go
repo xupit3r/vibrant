@@ -22,7 +22,18 @@ func Add(a, b *Tensor) *Tensor {
 		}
 	}
 
-	// CPU fallback
+	// CPU fallback — ensure GPU tensors have CPU data available
+	if a.IsOnGPU() {
+		if _, err := a.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("Add: failed to get CPU data for a: %v", err))
+		}
+	}
+	if b.IsOnGPU() {
+		if _, err := b.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("Add: failed to get CPU data for b: %v", err))
+		}
+	}
+
 	result := NewTensor(a.shape, a.dtype)
 
 	switch a.dtype {
@@ -43,6 +54,18 @@ func Add(a, b *Tensor) *Tensor {
 func Sub(a, b *Tensor) *Tensor {
 	if !shapesMatch(a.shape, b.shape) {
 		panic(fmt.Sprintf("shape mismatch: %v vs %v", a.shape, b.shape))
+	}
+
+	// CPU fallback — ensure GPU tensors have CPU data available
+	if a.IsOnGPU() {
+		if _, err := a.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("Sub: failed to get CPU data for a: %v", err))
+		}
+	}
+	if b.IsOnGPU() {
+		if _, err := b.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("Sub: failed to get CPU data for b: %v", err))
+		}
 	}
 
 	result := NewTensor(a.shape, a.dtype)
@@ -76,7 +99,18 @@ func Mul(a, b *Tensor) *Tensor {
 		}
 	}
 
-	// CPU fallback
+	// CPU fallback — ensure GPU tensors have CPU data available
+	if a.IsOnGPU() {
+		if _, err := a.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("Mul: failed to get CPU data for a: %v", err))
+		}
+	}
+	if b.IsOnGPU() {
+		if _, err := b.EnsureCPUData(); err != nil {
+			panic(fmt.Sprintf("Mul: failed to get CPU data for b: %v", err))
+		}
+	}
+
 	result := NewTensor(a.shape, a.dtype)
 
 	switch a.dtype {
@@ -395,12 +429,15 @@ func Reshape(a *Tensor, newShape []int) *Tensor {
 	}
 
 	return &Tensor{
-		data:   a.data,
-		shape:  newShape,
-		stride: computeStrides(newShape),
-		dtype:  a.dtype,
-		device: a.device,
-		offset: a.offset,
+		data:       a.data,
+		shape:      newShape,
+		stride:     computeStrides(newShape),
+		dtype:      a.dtype,
+		device:     a.device,
+		offset:     a.offset,
+		gpuBuffer:  a.gpuBuffer,
+		gpuDevice:  a.gpuDevice,
+		gpuKernels: a.gpuKernels,
 	}
 }
 

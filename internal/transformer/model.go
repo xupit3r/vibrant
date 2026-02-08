@@ -142,9 +142,15 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	seqLen := len(tokenIDs[0])
 
 	// Create position indices
+	// When using KV-cache, start from the current cache position
+	// (prefill starts at 0, decode continues from cacheLen)
+	startPos := 0
+	if useCache && len(m.layers) > 0 {
+		startPos = m.layers[0].CacheLen()
+	}
 	positions := make([]int, seqLen)
 	for i := range positions {
-		positions[i] = i
+		positions[i] = startPos + i
 	}
 
 	// 1. Embed tokens

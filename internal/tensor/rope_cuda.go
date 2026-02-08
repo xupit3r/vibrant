@@ -133,28 +133,33 @@ func ropeGPU(input *Tensor, cosTable, sinTable []float32, positions []int) *Tens
 		nil, // default stream
 	)
 
-	// Free temporary buffers (cos, sin, positions)
+	if err != nil {
+		fmt.Printf("CUDA RoPE: kernel launch failed: %v\n", err)
+		cosBuf.Free()
+		sinBuf.Free()
+		posBuf.Free()
+		outputBuf.Free()
+		return nil
+	}
+
+	// Sync BEFORE freeing temp buffers - kernel may still be reading them
+	if err := cudaDev.Sync(); err != nil {
+		fmt.Printf("CUDA RoPE: sync failed: %v\n", err)
+		cosBuf.Free()
+		sinBuf.Free()
+		posBuf.Free()
+		outputBuf.Free()
+		return nil
+	}
+
+	// Free temporary buffers after sync (kernel is done reading them)
 	cosBuf.Free()
 	sinBuf.Free()
 	posBuf.Free()
 
-	if err != nil {
-		fmt.Printf("CUDA RoPE: kernel launch failed: %v\n", err)
-		outputBuf.Free()
-		return nil
-	}
-
-	// Sync
-	if err := cudaDev.Sync(); err != nil {
-		fmt.Printf("CUDA RoPE: sync failed: %v\n", err)
-		outputBuf.Free()
-		return nil
-	}
-
-	// Create output tensor
-	outputData := make([]float32, totalSize)
+	// Create output tensor (data=nil so EnsureCPUData will transfer from GPU)
 	outputTensor := &Tensor{
-		data:       outputData,
+		data:       nil,
 		shape:      append([]int{}, input.shape...),
 		stride:     append([]int{}, input.stride...),
 		dtype:      Float32,

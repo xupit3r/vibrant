@@ -85,10 +85,9 @@ func matmulGPU(a, b *Tensor) *Tensor {
 
 	fmt.Printf("[DEBUG] CUDA MatMul: sync completed\n")
 
-	// Create output tensor
-	outputData := make([]float32, M*N) // Keep CPU copy
+	// Create output tensor (data=nil so EnsureCPUData will transfer from GPU)
 	outputTensor := &Tensor{
-		data:       outputData,
+		data:       nil,
 		shape:      []int{M, N},
 		stride:     []int{N, 1},
 		dtype:      Float32,
@@ -156,10 +155,9 @@ func softmaxGPU(input *Tensor) *Tensor {
 		return nil
 	}
 
-	// Create output tensor
-	outputData := make([]float32, size)
+	// Create output tensor (data=nil so EnsureCPUData will transfer from GPU)
 	outputTensor := &Tensor{
-		data:       outputData,
+		data:       nil,
 		shape:      append([]int{}, input.shape...),
 		stride:     append([]int{}, input.stride...),
 		dtype:      Float32,
@@ -173,6 +171,8 @@ func softmaxGPU(input *Tensor) *Tensor {
 }
 
 // rmsNormGPU performs RMS normalization on GPU using CUDA
+// Input can be [batch, seq, hidden] or [batch*seq, hidden] — normalizes along last dimension
+// Weight must be [hidden_dim] matching the last dimension of input
 func rmsNormGPU(input, weight *Tensor, eps float32) *Tensor {
 	if !input.IsOnGPU() || !weight.IsOnGPU() {
 		return nil
@@ -182,13 +182,17 @@ func rmsNormGPU(input, weight *Tensor, eps float32) *Tensor {
 		return nil
 	}
 
-	size := 1
+	totalSize := 1
 	for _, dim := range input.shape {
-		size *= dim
+		totalSize *= dim
 	}
 
+	// The normalization dimension is the last dimension (must match weight size)
+	normDim := input.shape[len(input.shape)-1]
+	batchSize := totalSize / normDim
+
 	// Allocate output buffer
-	outputSize := int64(size * 4)
+	outputSize := int64(totalSize * 4)
 	outputBuf, err := input.gpuDevice.Allocate(outputSize)
 	if err != nil {
 		fmt.Printf("CUDA RMSNorm: failed to allocate output buffer: %v\n", err)
@@ -208,15 +212,29 @@ func rmsNormGPU(input, weight *Tensor, eps float32) *Tensor {
 		return nil
 	}
 
-	// Launch kernel
-	err = kernels.LaunchRMSNorm(
-		unsafe.Pointer(input.gpuBuffer.Ptr()),
-		unsafe.Pointer(weight.gpuBuffer.Ptr()),
-		unsafe.Pointer(outputBuf.Ptr()),
-		size,
-		eps,
-		nil, // default stream
-	)
+	// Use batched kernel: each "batch" is one row to normalize
+	if batchSize == 1 {
+		// Single row — use simple kernel
+		err = kernels.LaunchRMSNorm(
+			unsafe.Pointer(input.gpuBuffer.Ptr()),
+			unsafe.Pointer(weight.gpuBuffer.Ptr()),
+			unsafe.Pointer(outputBuf.Ptr()),
+			normDim,
+			eps,
+			nil, // default stream
+		)
+	} else {
+		// Multiple rows — use batched kernel
+		err = kernels.LaunchRMSNormBatched(
+			unsafe.Pointer(input.gpuBuffer.Ptr()),
+			unsafe.Pointer(weight.gpuBuffer.Ptr()),
+			unsafe.Pointer(outputBuf.Ptr()),
+			batchSize,
+			normDim,
+			eps,
+			nil, // default stream
+		)
+	}
 
 	if err != nil {
 		fmt.Printf("CUDA RMSNorm: kernel launch failed: %v\n", err)
@@ -231,10 +249,9 @@ func rmsNormGPU(input, weight *Tensor, eps float32) *Tensor {
 		return nil
 	}
 
-	// Create output tensor
-	outputData := make([]float32, size)
+	// Create output tensor (data=nil so EnsureCPUData will transfer from GPU)
 	outputTensor := &Tensor{
-		data:       outputData,
+		data:       nil,
 		shape:      append([]int{}, input.shape...),
 		stride:     append([]int{}, input.stride...),
 		dtype:      Float32,
@@ -305,10 +322,9 @@ func addGPU(a, b *Tensor) *Tensor {
 		return nil
 	}
 
-	// Create output tensor
-	outputData := make([]float32, size)
+	// Create output tensor (data=nil so EnsureCPUData will transfer from GPU)
 	outputTensor := &Tensor{
-		data:       outputData,
+		data:       nil,
 		shape:      append([]int{}, a.shape...),
 		stride:     append([]int{}, a.stride...),
 		dtype:      Float32,
@@ -379,10 +395,9 @@ func mulGPU(a, b *Tensor) *Tensor {
 		return nil
 	}
 
-	// Create output tensor
-	outputData := make([]float32, size)
+	// Create output tensor (data=nil so EnsureCPUData will transfer from GPU)
 	outputTensor := &Tensor{
-		data:       outputData,
+		data:       nil,
 		shape:      append([]int{}, a.shape...),
 		stride:     append([]int{}, a.stride...),
 		dtype:      Float32,
@@ -458,10 +473,9 @@ func siluGPU(input *Tensor) *Tensor {
 		return nil
 	}
 
-	// Create output tensor
-	outputData := make([]float32, size)
+	// Create output tensor (data=nil so EnsureCPUData will transfer from GPU)
 	outputTensor := &Tensor{
-		data:       outputData,
+		data:       nil,
 		shape:      append([]int{}, input.shape...),
 		stride:     append([]int{}, input.stride...),
 		dtype:      Float32,

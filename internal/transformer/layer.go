@@ -118,6 +118,11 @@ func (l *TransformerLayer) ClearCache() {
 	l.attn.ClearCache()
 }
 
+// CacheLen returns the current KV-cache length for this layer
+func (l *TransformerLayer) CacheLen() int {
+	return l.attn.cacheLen
+}
+
 // MoveToDevice moves layer weights to the specified device
 func (l *TransformerLayer) MoveToDevice(device tensor.Device) error {
 	// Move attention weights
