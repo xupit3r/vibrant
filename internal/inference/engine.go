@@ -3,12 +3,16 @@ package inference
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/xupit3r/vibrant/internal/gguf"
 	"github.com/xupit3r/vibrant/internal/tensor"
 	"github.com/xupit3r/vibrant/internal/tokenizer"
 	"github.com/xupit3r/vibrant/internal/transformer"
 )
+
+// Debug flag for verbose logging
+var DebugInference = false
 
 // Engine is the main inference engine for LLM generation
 type Engine struct {
@@ -84,6 +88,11 @@ func (e *Engine) Generate(ctx context.Context, prompt string, opts GenerateOptio
 
 	// Tokenize prompt
 	tokens := e.tokenizer.Encode(prompt, true, false) // addBOS=true, addEOS=false
+	
+	if DebugInference {
+		fmt.Printf("[DEBUG] Prompt: %q\n", prompt)
+		fmt.Printf("[DEBUG] Encoded tokens: %v (count: %d)\n", tokens, len(tokens))
+	}
 
 	// Determine max tokens
 	maxTokens := e.config.MaxTokens
@@ -108,6 +117,11 @@ func (e *Engine) Generate(ctx context.Context, prompt string, opts GenerateOptio
 	// Extract logits for last token: [batch=1, seq=len(tokens), vocab] -> [vocab]
 	logitsShape := logits.Shape()
 	lastTokenLogits := extractLastTokenLogits(logits, logitsShape)
+	
+	if DebugInference {
+		fmt.Printf("[DEBUG] Prefill complete. Logits shape: %v\n", logitsShape)
+		printLogitsStats(lastTokenLogits)
+	}
 
 	// Decode: generate tokens one by one
 	generatedTokens := []int{}
@@ -122,9 +136,18 @@ func (e *Engine) Generate(ctx context.Context, prompt string, opts GenerateOptio
 		// Sample next token
 		nextToken := e.sampler.Sample(lastTokenLogits)
 		generatedTokens = append(generatedTokens, nextToken)
+		
+		if DebugInference {
+			text := e.tokenizer.Decode([]int{nextToken}, true)
+			fmt.Printf("[DEBUG] Step %d: sampled token %d -> %q\n", i, nextToken, text)
+			printLogitsStats(lastTokenLogits)
+		}
 
 		// Check for stop tokens
 		if e.isStopToken(nextToken, stopTokens) {
+			if DebugInference {
+				fmt.Printf("[DEBUG] Hit stop token: %d\n", nextToken)
+			}
 			break
 		}
 
@@ -142,6 +165,12 @@ func (e *Engine) Generate(ctx context.Context, prompt string, opts GenerateOptio
 
 	// Decode tokens to text
 	text := e.tokenizer.Decode(generatedTokens, true) // skipSpecial=true
+	
+	if DebugInference {
+		fmt.Printf("[DEBUG] Generated %d tokens\n", len(generatedTokens))
+		fmt.Printf("[DEBUG] Generated token IDs: %v\n", generatedTokens)
+		fmt.Printf("[DEBUG] Final text: %q\n", text)
+	}
 
 	return text, nil
 }
@@ -240,6 +269,46 @@ func (e *Engine) isStopToken(token int, stopTokens []int) bool {
 		}
 	}
 	return false
+}
+
+// printLogitsStats prints statistics about the logits distribution
+func printLogitsStats(logits *tensor.Tensor) {
+	vocabSize := logits.Size()
+	if vocabSize == 0 {
+		return
+	}
+
+	// Find max, min, and collect top-5 tokens
+	type tokenScore struct {
+		id    int
+		score float32
+	}
+	
+	maxVal := logits.At(0)
+	minVal := logits.At(0)
+	scores := make([]tokenScore, vocabSize)
+	
+	for i := 0; i < vocabSize; i++ {
+		val := logits.At(i)
+		if val > maxVal {
+			maxVal = val
+		}
+		if val < minVal {
+			minVal = val
+		}
+		scores[i] = tokenScore{id: i, score: val}
+	}
+	
+	// Sort to get top-5
+	sort.Slice(scores, func(i, j int) bool {
+		return scores[i].score > scores[j].score
+	})
+	
+	fmt.Printf("[DEBUG] Logits: min=%.4f, max=%.4f, top-5: ", minVal, maxVal)
+	for i := 0; i < 5 && i < len(scores); i++ {
+		fmt.Printf("(%d:%.2f) ", scores[i].id, scores[i].score)
+	}
+	fmt.Println()
 }
 
 // extractLastTokenLogits extracts logits for the last token in the sequence

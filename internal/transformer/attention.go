@@ -440,6 +440,17 @@ func applyCausalMask(scores *tensor.Tensor) {
 	data := scores.Data().([]float32)
 	negInf := float32(math.Inf(-1))
 
+	// When rows < cols, we're in decode mode with KV cache
+	// The query is for new token(s) at absolute positions [cache_len, cache_len+rows)
+	// and they should attend to all cache positions [0, cache_len)
+	// So we need to mask based on absolute positions, not relative
+	if rows < cols {
+		// In KV cache mode: query tokens are AFTER all key tokens
+		// No masking needed - new tokens can attend to all previous cached tokens
+		return
+	}
+
+	// Standard causal mask for prefill (rows == cols)
 	for i := 0; i < rows; i++ {
 		for j := i + 1; j < cols; j++ {
 			data[i*cols+j] = negInf

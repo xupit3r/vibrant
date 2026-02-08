@@ -1,9 +1,3 @@
-// +build ignore
-
-// Test program for GPU inference
-// Build: go build -tags cuda -o test_gpu test_gpu_inference.go
-// Run: LD_LIBRARY_PATH=./build/cuda:$LD_LIBRARY_PATH ./test_gpu
-
 package main
 
 import (
@@ -18,6 +12,9 @@ import (
 )
 
 func main() {
+	// Enable debug logging
+	inference.DebugInference = true
+	
 	fmt.Println("=== GPU Inference Test ===")
 	fmt.Println()
 
@@ -38,8 +35,8 @@ func main() {
 	fmt.Printf("Model: %s\n", modelPath)
 	fmt.Println()
 
-	// Test 1: GPU Inference
 	fmt.Println("--- Test 1: GPU Inference ---")
+	fmt.Println("NOTE: Running with DEBUG mode enabled")
 	if err := testGPUInference(modelPath); err != nil {
 		fmt.Printf("GPU test FAILED: %v\n", err)
 		os.Exit(1)
@@ -49,6 +46,7 @@ func main() {
 
 	// Test 2: CPU Inference (baseline)
 	fmt.Println("--- Test 2: CPU Inference (baseline) ---")
+	fmt.Println("NOTE: Running with DEBUG mode enabled")
 	if err := testCPUInference(modelPath); err != nil {
 		fmt.Printf("CPU test FAILED: %v\n", err)
 		os.Exit(1)
@@ -61,7 +59,7 @@ func main() {
 
 func testGPUInference(modelPath string) error {
 	config := &inference.Config{
-		MaxTokens:   20, // Short generation for testing
+		MaxTokens:   5, // Very short for debugging
 		Temperature: 0.0, // Greedy for determinism
 		TopP:        1.0,
 		TopK:        0,
@@ -80,13 +78,13 @@ func testGPUInference(modelPath string) error {
 	fmt.Printf("Model loaded in %.2fs\n", loadTime.Seconds())
 
 	// Simple test prompt
-	prompt := "Write a hello world program in Python:\n\n"
+	prompt := "Hello"
 	fmt.Printf("Prompt: %q\n", prompt)
-	fmt.Println("Generating...")
+	fmt.Println("Generating (5 tokens max)...")
 
 	ctx := context.Background()
 	opts := inference.GenerateOptions{
-		MaxTokens: 20,
+		MaxTokens: 5,
 	}
 
 	start = time.Now()
@@ -112,7 +110,7 @@ func testGPUInference(modelPath string) error {
 
 func testCPUInference(modelPath string) error {
 	config := &inference.Config{
-		MaxTokens:   20,
+		MaxTokens:   5, // Very short for debugging
 		Temperature: 0.0, // Greedy for determinism
 		TopP:        1.0,
 		TopK:        0,
@@ -132,11 +130,11 @@ func testCPUInference(modelPath string) error {
 
 	prompt := "Write a hello world program in Python:\n\n"
 	fmt.Printf("Prompt: %q\n", prompt)
-	fmt.Println("Generating...")
+	fmt.Println("Generating (5 tokens max)...")
 
 	ctx := context.Background()
 	opts := inference.GenerateOptions{
-		MaxTokens: 20,
+		MaxTokens: 5,
 	}
 
 	start = time.Now()

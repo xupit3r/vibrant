@@ -142,9 +142,14 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	seqLen := len(tokenIDs[0])
 
 	// Create position indices
+	// During decode with cache, positions must start from cache length
 	positions := make([]int, seqLen)
+	startPos := 0
+	if useCache && len(m.layers) > 0 {
+		startPos = m.layers[0].CacheLen()
+	}
 	for i := range positions {
-		positions[i] = i
+		positions[i] = startPos + i
 	}
 
 	// 1. Embed tokens
