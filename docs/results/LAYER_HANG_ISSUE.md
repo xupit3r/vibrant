@@ -137,7 +137,30 @@ None currently. Cannot test inference until this is resolved.
 
 ---
 
-**Status**: Open - High Priority
-**Blocking**: All inference work
+## Resolution
+
+**Status**: ✅ **RESOLVED** - Not a hang, just slow inference
+
+**Root Cause**: Misdiagnosis - short timeouts made it appear to hang
+- Each layer takes ~0.6s
+- 36 layers = ~22 seconds
+- Output projection = ~5s (with caching)
+- **Total**: ~30s per token
+
+**Solution**:
+- Added per-layer timing (commit c71c539)
+- Increased test timeouts to 3+ minutes
+- Confirmed all layers complete successfully
+
+**Performance**:
+- Output weight caching working (25% improvement)
+- Main bottleneck is now transformer layers (73% of time)
+
+**Next**: Debug repetitive output issue (the real inference bug)
+
+---
+
+**Status**: ✅ Resolved
+**Was Blocking**: All inference work (now unblocked)
 **First Observed**: February 9, 2026 afternoon
-**Last Working**: February 9, 2026 morning (commit b8ca5b2 test output)
+**Resolved**: February 9, 2026 evening (commit c71c539)
