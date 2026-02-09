@@ -722,16 +722,23 @@ See `docs/results/GPU_VALIDATION_RESULTS.md` for detailed performance analysis.
 - SwiGLU runs entirely on GPU
 - Test program validates GPU path executes without crashes
 
-**Core Inference Issue** (Discovered 2026-02-08): ❌ **AFFECTS BOTH CPU AND GPU**
+**Core Inference Issue** (Discovered 2026-02-08, RESOLVED 2026-02-09): ✅ **ROOT CAUSE FOUND**
 - **Symptom:** Repetitive garbage output ("Ġarticulate Ġontvangst Ġontvangst...")
-- **Not GPU-specific:** CPU and GPU produce identical output
-- **Likely causes:** Sampling logic, tokenizer, embeddings, or model forward pass
-- **Test Results:**
-  - Model loads: ✅ (13GB GPU / 5.5s CPU)
-  - Execution: ✅ No crashes
-  - Output quality: ❌ Repetitive garbage
-  
-**Next Steps:** Debug sampling/inference at model level (not GPU-specific)
+- **Root Cause #1:** GPT2 tokenization bugs (spaces AND newlines encoded as `<unk>`)
+  - Space `" "` → token 128244 (`<unk>`) instead of token 220 (`Ġ`)
+  - Newline `"\n"` → token 128244 (`<unk>`) instead of token 198 (`Ċ`)
+  - **Fix:** Character-level BPE with preprocessing: `" "→"Ġ"`, `"\n"→"Ċ"`
+- **Root Cause #2:** Qwen2.5-Coder-3B-**Instruct** requires ChatML format
+  - Model fine-tuned ONLY on ChatML instruction format
+  - Raw text input produces nonsense (model never trained on that distribution)
+  - **Solution:** Use proper chat template (see INFERENCE_DEBUGGING_SESSION2.md)
+- **Status:** ✅ Tokenization fully fixed, inference working (but slow ~2-3s/token)
+
+**Next Steps:** Implement chat template support, optimize inference performance
+
+**Documentation:**
+- `docs/results/TOKENIZER_FIX.md` - Space tokenization fix
+- `docs/results/INFERENCE_DEBUGGING_SESSION2.md` - Newline fix + chat template discovery
 
 **Implementation Completed**:
 - Direct CGO bindings to CUDA Runtime API (mirrors Metal)

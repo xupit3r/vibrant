@@ -161,22 +161,59 @@ After:  [256]            = ["ĠĠ"]              ✅
 - Input properly represents "Hello world"
 - Tokenization matches reference implementation
 
-### Remaining Work:
-While tokenization is now correct, model still produces unexpected output (token 128008). This suggests:
-1. Possible chat template requirement
-2. Or another bug in transformer/inference layer
-3. Investigation continues...
+### UPDATE: Newline Bug Discovered (Same Day!)
+
+**ANOTHER CRITICAL BUG**: After fixing spaces, discovered newlines were also broken!
+
+#### The Problem:
+```
+"\n" → [128244] = ["<unk>"]  ❌
+```
+
+Every newline was encoded as `<unk>`, which broke ChatML format:
+```
+<|im_start|>system\n       ← This \n became <unk>!
+You are helpful.<|im_end|>
+```
+
+#### The Fix:
+GPT2 uses "Ċ" (U+010A) for newlines, just like "Ġ" for spaces!
+
+```go
+if t.modelType == "gpt2" {
+    text = strings.ReplaceAll(text, " ", "Ġ")   // Space -> U+0120
+    text = strings.ReplaceAll(text, "\n", "Ċ")  // Newline -> U+010A
+}
+```
+
+#### Validation:
+```
+"\n" → [198] = ["Ċ"]  ✅
+```
+
+Token 198 is the correct newline token!
+
+### Root Cause of Bizarre Logits - SOLVED!
+
+**Discovery**: Qwen2.5-Coder-3B-**Instruct** requires ChatML format!
+
+The model was fine-tuned exclusively on instruction format, NOT raw text. Feeding it "Hello world" is like speaking English to a French-only model - produces nonsense because it never saw that distribution during training.
+
+**Solution**: Use proper ChatML format (see INFERENCE_DEBUGGING_SESSION2.md for details)
 
 ---
 
 ## Lessons Learned
 
 1. **GPT2 tokenization is NOT byte-level BPE**
-   - Uses special "Ġ" character for spaces
-   - Requires character-level initial split
+   - Uses special Unicode characters for common whitespace
+   - Space: "Ġ" (U+0120)
+   - Newline: "Ċ" (U+010A)
+   - Requires character-level initial split, not byte-level
 
 2. **Vocabulary structure matters**
    - Token 220 = "Ġ" (single space)
+   - Token 198 = "Ċ" (newline)
    - Token 1879 = "Ġworld" (space + word)
    - Token 256 = "ĠĠ" (two spaces)
 
@@ -200,7 +237,7 @@ While tokenization is now correct, model still produces unexpected output (token
 
 ---
 
-**Status**: ✅ Tokenizer fixed, inference improved but not fully working  
-**Next**: Debug remaining logits issue (token 128008 prediction)  
-**Date**: February 9, 2026
+**Status**: ✅ Tokenizer FULLY FIXED (spaces + newlines), chat template requirement identified
+**Next**: Implement chat template support, optimize inference performance
+**Date**: February 9, 2026 (Updated with newline fix same day)
 
