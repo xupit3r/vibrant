@@ -472,6 +472,8 @@ func applySoftmax(scores *tensor.Tensor) {
 	cols := shape[1]
 	data := scores.Data().([]float32)
 
+	debugAttn := false // Set to true to debug attention distributions
+
 	for i := 0; i < rows; i++ {
 		row := data[i*cols : (i+1)*cols]
 
@@ -500,6 +502,22 @@ func applySoftmax(scores *tensor.Tensor) {
 			for j := range row {
 				row[j] *= invSum
 			}
+		}
+
+		// Debug attention distribution (for decode with cache)
+		if debugAttn && i == 0 && cols > 1 {
+			// Sample first and last attention weights
+			fmt.Printf("[ATTN] Row %d: first=%.4f, last=%.4f, cols=%d\n", i, row[0], row[cols-1], cols)
+			// Check if attention is too uniform
+			entropy := float32(0)
+			for _, p := range row {
+				if p > 0 {
+					entropy -= p * float32(math.Log(float64(p)))
+				}
+			}
+			maxEntropy := float32(math.Log(float64(cols)))
+			normalizedEntropy := entropy / maxEntropy
+			fmt.Printf("[ATTN] Entropy: %.4f (normalized: %.4f, 1.0=uniform)\n", entropy, normalizedEntropy)
 		}
 	}
 }

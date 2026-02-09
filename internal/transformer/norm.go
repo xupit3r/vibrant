@@ -87,6 +87,9 @@ cpuPath:
 	oData := output.Data().([]float32)
 	wData := r.weight.Data().([]float32)
 
+	// Debug output norm specifically
+	debugOutputNorm := false // Set to true to debug final norm
+
 	for b := 0; b < batchSize; b++ {
 		for s := 0; s < seqLen; s++ {
 			off := (b*seqLen + s) * hiddenDim
@@ -100,7 +103,19 @@ cpuPath:
 			}
 
 			// RMS = sqrt(mean(x^2) + eps), then compute 1/rms
-			rmsInv := float32(1.0 / math.Sqrt(float64(sumSq/float32(hiddenDim))+r.eps))
+			meanSq := sumSq / float32(hiddenDim)
+			rms := float32(math.Sqrt(float64(meanSq) + r.eps))
+			rmsInv := 1.0 / rms
+
+			if debugOutputNorm && s == 0 {
+				// Log RMS stats for first token in sequence
+				inMean := float32(0)
+				for _, v := range row[:100] {
+					inMean += v
+				}
+				inMean /= 100
+				fmt.Printf("[NORM] Input mean: %.4f, RMS: %.4f, rmsInv: %.6f\n", inMean, rms, rmsInv)
+			}
 
 			// Normalize and scale by weight
 			for d := 0; d < hiddenDim; d++ {

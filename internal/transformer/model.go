@@ -2,6 +2,7 @@ package transformer
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/xupit3r/vibrant/internal/gguf"
@@ -164,6 +165,10 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 		positions[i] = startPos + i
 	}
 
+	// Positions debug (disabled for now)
+	// fmt.Printf("[MODEL] Positions: %v (startPos=%d, cacheLen=%d, seqLen=%d)\n",
+	// 	positions, startPos, m.layers[0].CacheLen(), seqLen)
+
 	// 1. Embed tokens
 	fmt.Printf("[MODEL] Starting embeddings...\n")
 	hidden, err := m.embeddings.Forward(tokenIDs)
@@ -183,14 +188,18 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 
 	// 2. Pass through all transformer layers
 	for i, layer := range m.layers {
-		layerStart := time.Now()
+		hidden, err = layer.Forward(hidden, positions, useCache)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d failed: %w", i, err)
+		}
 
-		// Debug: track hidden state statistics before layer
-		if i % 10 == 0 || i == len(m.layers)-1 {
+		// Debug: Check layer 35's output specifically
+		if i == 35 {
 			hiddenData, _ := hidden.EnsureCPUData()
 			hData := hiddenData.([]float32)
 			hMin, hMax, hSum := hData[0], hData[0], float32(0)
-			for _, v := range hData[:min(100, len(hData))] { // Sample first 100 values
+			sampleSize := min(200, len(hData))
+			for _, v := range hData[:sampleSize] {
 				if v < hMin {
 					hMin = v
 				}
@@ -199,43 +208,152 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 				}
 				hSum += v
 			}
-			hMean := hSum / float32(min(100, len(hData)))
-			fmt.Printf("[MODEL] Layer %d input: min=%.4f, max=%.4f, mean=%.4f\n", i, hMin, hMax, hMean)
-		}
+			hMean := hSum / float32(sampleSize)
 
-		hidden, err = layer.Forward(hidden, positions, useCache)
-		if err != nil {
-			return nil, fmt.Errorf("layer %d failed: %w", i, err)
-		}
-
-		layerTime := time.Since(layerStart)
-		if i % 10 == 0 || i == len(m.layers)-1 {
-			fmt.Printf("[MODEL] Layer %d complete in %.3fs\n", i, layerTime.Seconds())
+			// Sample first 10 elements to check pattern
+			fmt.Printf("[DEBUG] Layer 35 output: min=%.4f, max=%.4f, mean=%.4f, first10=[", hMin, hMax, hMean)
+			for j := 0; j < min(10, len(hData)); j++ {
+				if j > 0 {
+					fmt.Printf(", ")
+				}
+				fmt.Printf("%.2f", hData[j])
+			}
+			fmt.Printf("]\n")
 		}
 	}
 
 	// 3. Final normalization
+	// Debug: check before and after final norm
+	debugOutputNorm := false // Enable to debug normalization convergence
+	if debugOutputNorm {
+		// Check input to final norm
+		hiddenData, _ := hidden.EnsureCPUData()
+		hData := hiddenData.([]float32)
+		hMin, hMax, hSum := hData[0], hData[0], float32(0)
+		sampleSize := min(200, len(hData))
+		for _, v := range hData[:sampleSize] {
+			if v < hMin {
+				hMin = v
+			}
+			if v > hMax {
+				hMax = v
+			}
+			hSum += v
+		}
+		hMean := hSum / float32(sampleSize)
+
+		// Compute RMS (root mean square)
+		sumSq := float32(0)
+		for _, v := range hData {
+			sumSq += v * v
+		}
+		rms := float32(math.Sqrt(float64(sumSq / float32(len(hData)))))
+
+		// Sample first 10 elements
+		fmt.Printf("[BEFORE_FINAL_NORM] min=%.4f, max=%.4f, mean=%.4f, RMS=%.4f, first10=[", hMin, hMax, hMean, rms)
+		for j := 0; j < min(10, len(hData)); j++ {
+			if j > 0 {
+				fmt.Printf(", ")
+			}
+			fmt.Printf("%.2f", hData[j])
+		}
+		fmt.Printf("]\n")
+
+		// Check norm weight
+		normWeightData := m.outputNorm.weight.Data().([]float32)
+		wMin, wMax, wSum := normWeightData[0], normWeightData[0], float32(0)
+		for _, w := range normWeightData[:min(100, len(normWeightData))] {
+			if w < wMin {
+				wMin = w
+			}
+			if w > wMax {
+				wMax = w
+			}
+			wSum += w
+		}
+		wMean := wSum / float32(min(100, len(normWeightData)))
+		fmt.Printf("[FINAL_NORM_WEIGHT] min=%.4f, max=%.4f, mean=%.4f\n", wMin, wMax, wMean)
+
+		// Check output weight matrix rows for top tokens
+		if m.outputWeightCache != nil {
+			fmt.Printf("[OUTPUT_WEIGHT] Shape: %v, DType: %v\n", m.outputWeightCache.Shape(), m.outputWeightCache.DType())
+
+			outWeight := m.outputWeightCache.Data().([]float32)
+			vocabSize := m.config.VocabSize
+			hiddenDim := m.config.HiddenDim
+
+			// Sample row for token 128008 (the problematic token)
+			if 128008 < vocabSize {
+				row := outWeight[128008*hiddenDim : (128008+1)*hiddenDim]
+				rowMin, rowMax, rowSum := row[0], row[0], float32(0)
+				for i := 0; i < min(100, len(row)); i++ {
+					if row[i] < rowMin {
+						rowMin = row[i]
+					}
+					if row[i] > rowMax {
+						rowMax = row[i]
+					}
+					rowSum += row[i]
+				}
+				rowMean := rowSum / float32(min(100, len(row)))
+				fmt.Printf("[OUTPUT_WEIGHT] Token 128008 row: min=%.4f, max=%.4f, mean=%.4f\n", rowMin, rowMax, rowMean)
+			}
+
+			// Sample row for token 90760
+			if 90760 < vocabSize {
+				row := outWeight[90760*hiddenDim : (90760+1)*hiddenDim]
+				rowMin, rowMax, rowSum := row[0], row[0], float32(0)
+				for i := 0; i < min(100, len(row)); i++ {
+					if row[i] < rowMin {
+						rowMin = row[i]
+					}
+					if row[i] > rowMax {
+						rowMax = row[i]
+					}
+					rowSum += row[i]
+				}
+				rowMean := rowSum / float32(min(100, len(row)))
+				fmt.Printf("[OUTPUT_WEIGHT] Token 90760 row: min=%.4f, max=%.4f, mean=%.4f\n", rowMin, rowMax, rowMean)
+			}
+		}
+	}
+
 	hidden, err = m.outputNorm.Forward(hidden)
 	if err != nil {
 		return nil, fmt.Errorf("output norm failed: %w", err)
 	}
 
-	// Debug: check hidden state after final norm
-	hiddenData, _ := hidden.EnsureCPUData()
-	hData := hiddenData.([]float32)
-	hMin, hMax, hSum := hData[0], hData[0], float32(0)
-	sampleSize := min(200, len(hData))
-	for _, v := range hData[:sampleSize] {
-		if v < hMin {
-			hMin = v
+	if debugOutputNorm {
+		// Check output from final norm
+		hiddenData, _ := hidden.EnsureCPUData()
+		hData := hiddenData.([]float32)
+		hMin, hMax, hSum := hData[0], hData[0], float32(0)
+		sampleSize := min(200, len(hData))
+		for _, v := range hData[:sampleSize] {
+			if v < hMin {
+				hMin = v
+			}
+			if v > hMax {
+				hMax = v
+			}
+			hSum += v
 		}
-		if v > hMax {
-			hMax = v
+		hMean := hSum / float32(sampleSize)
+
+		// Sample first 10 elements
+		fmt.Printf("[AFTER_FINAL_NORM] min=%.4f, max=%.4f, mean=%.4f, first10=[", hMin, hMax, hMean)
+		for j := 0; j < min(10, len(hData)); j++ {
+			if j > 0 {
+				fmt.Printf(", ")
+			}
+			fmt.Printf("%.2f", hData[j])
 		}
-		hSum += v
+		fmt.Printf("]\n\n")
 	}
-	hMean := hSum / float32(sampleSize)
-	fmt.Printf("[MODEL] After final norm: min=%.4f, max=%.4f, mean=%.4f\n", hMin, hMax, hMean)
+
+	// Final norm debug (disabled for now)
+	// hiddenData, _ := hidden.EnsureCPUData()
+	// ...
 
 	// 4. Project to vocabulary (compute logits)
 	// hidden: [batch, seq, hidden_dim], output_weight: [hidden_dim, vocab_size]
@@ -276,6 +394,44 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	fmt.Printf("[MODEL] MatMul complete\n")
 	logits := tensor.Reshape(logitsFlat, []int{batchSize, seqLen, m.config.VocabSize})
 	fmt.Printf("[MODEL] Output projection complete, logits shape: %v\n", logits.Shape())
+
+	// Debug: check logits distribution
+	if debugOutputNorm {
+		logitsData, _ := logits.EnsureCPUData()
+		lData := logitsData.([]float32)
+
+		// Get logits for last token in sequence
+		lastTokenOff := (seqLen - 1) * m.config.VocabSize
+		lastTokenLogits := lData[lastTokenOff : lastTokenOff+m.config.VocabSize]
+
+		// Find top 5 tokens
+		type TokenLogit struct {
+			token int
+			logit float32
+		}
+		top := make([]TokenLogit, 5)
+		for i := range top {
+			top[i] = TokenLogit{token: i, logit: lastTokenLogits[i]}
+		}
+
+		for i := 5; i < min(m.config.VocabSize, len(lastTokenLogits)); i++ {
+			if lastTokenLogits[i] > top[4].logit {
+				top[4] = TokenLogit{token: i, logit: lastTokenLogits[i]}
+				// Bubble sort to maintain order
+				for j := 3; j >= 0; j-- {
+					if top[j+1].logit > top[j].logit {
+						top[j], top[j+1] = top[j+1], top[j]
+					}
+				}
+			}
+		}
+
+		fmt.Printf("[LOGITS] Top 5: ")
+		for i := 0; i < 5; i++ {
+			fmt.Printf("token_%d=%.4f ", top[i].token, top[i].logit)
+		}
+		fmt.Printf("\n\n")
+	}
 
 	return logits, nil
 }
