@@ -20,10 +20,11 @@ func (t *Tokenizer) Encode(text string, addBOS, addEOS bool) []int {
 		return result
 	}
 
-	// GPT2-style preprocessing: replace spaces with Ġ (U+0120)
+	// GPT2-style preprocessing: replace spaces and newlines with special characters
 	// This is required for Qwen and other GPT2-based tokenizers
 	if t.modelType == "gpt2" {
-		text = strings.ReplaceAll(text, " ", "Ġ")
+		text = strings.ReplaceAll(text, " ", "Ġ")  // Space -> U+0120
+		text = strings.ReplaceAll(text, "\n", "Ċ") // Newline -> U+010A
 	}
 
 	// For GPT2 tokenizers, split into UTF-8 characters (runes)

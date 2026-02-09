@@ -173,12 +173,12 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	// 	positions, startPos, m.layers[0].CacheLen(), seqLen)
 
 	// 1. Embed tokens
-	fmt.Printf("[MODEL] Starting embeddings...\n")
+	// fmt.Printf("[MODEL] Starting embeddings...\n")
 	hidden, err := m.embeddings.Forward(tokenIDs)
 	if err != nil {
 		return nil, fmt.Errorf("embeddings failed: %w", err)
 	}
-	fmt.Printf("[MODEL] Embeddings complete, shape: %v\n", hidden.Shape())
+	// fmt.Printf("[MODEL] Embeddings complete, shape: %v\n", hidden.Shape())
 
 	// Debug: Check embedding RMS
 	if trackRMS {
