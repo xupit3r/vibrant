@@ -20,14 +20,27 @@ func (t *Tokenizer) Encode(text string, addBOS, addEOS bool) []int {
 		return result
 	}
 
-	// Convert text to UTF-8 bytes
-	bytes := []byte(text)
+	// GPT2-style preprocessing: replace spaces with Ġ (U+0120)
+	// This is required for Qwen and other GPT2-based tokenizers
+	if t.modelType == "gpt2" {
+		text = strings.ReplaceAll(text, " ", "Ġ")
+	}
 
-	// Convert bytes to initial token sequence
-	// Each byte becomes a token (for byte-level BPE)
-	tokens := make([]string, len(bytes))
-	for i, b := range bytes {
-		tokens[i] = string([]byte{b})
+	// For GPT2 tokenizers, split into UTF-8 characters (runes)
+	// For byte-level BPE, each character is a token initially
+	var tokens []string
+	if t.modelType == "gpt2" {
+		// Split into individual runes (characters), not bytes
+		for _, r := range text {
+			tokens = append(tokens, string(r))
+		}
+	} else {
+		// Original byte-level BPE
+		bytes := []byte(text)
+		tokens = make([]string, len(bytes))
+		for i, b := range bytes {
+			tokens[i] = string([]byte{b})
+		}
 	}
 
 	// Apply BPE merges iteratively

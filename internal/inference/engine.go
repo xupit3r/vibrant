@@ -155,8 +155,7 @@ func (e *Engine) Generate(ctx context.Context, prompt string, opts GenerateOptio
 	e.model.ClearCache()
 
 	// Tokenize prompt
-	// NOTE: Testing without BOS to match llama.cpp behavior
-	tokens := e.tokenizer.Encode(prompt, false, false) // addBOS=false, addEOS=false
+	tokens := e.tokenizer.Encode(prompt, true, false) // addBOS=true, addEOS=false
 	
 	if DebugInference {
 		fmt.Printf("[DEBUG] Prompt: %q\n", prompt)
