@@ -153,10 +153,12 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	}
 
 	// 1. Embed tokens
+	fmt.Printf("[MODEL] Starting embeddings...\n")
 	hidden, err := m.embeddings.Forward(tokenIDs)
 	if err != nil {
 		return nil, fmt.Errorf("embeddings failed: %w", err)
 	}
+	fmt.Printf("[MODEL] Embeddings complete, shape: %v\n", hidden.Shape())
 
 	// Move embeddings to GPU if model is on GPU
 	// (embeddings are computed on CPU and need to be transferred)
@@ -168,29 +170,42 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	}
 
 	// 2. Pass through all transformer layers
+	fmt.Printf("[MODEL] Processing %d layers...\n", len(m.layers))
 	for i, layer := range m.layers {
+		if i % 5 == 0 {
+			fmt.Printf("[MODEL] Layer %d/%d...\n", i, len(m.layers))
+		}
 		hidden, err = layer.Forward(hidden, positions, useCache)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d failed: %w", i, err)
 		}
 	}
+	fmt.Printf("[MODEL] All layers complete\n")
 
 	// 3. Final normalization
+	fmt.Printf("[MODEL] Starting output norm...\n")
 	hidden, err = m.outputNorm.Forward(hidden)
 	if err != nil {
 		return nil, fmt.Errorf("output norm failed: %w", err)
 	}
+	fmt.Printf("[MODEL] Output norm complete\n")
 
 	// 4. Project to vocabulary (compute logits)
 	// hidden: [batch, seq, hidden_dim], output_weight: [hidden_dim, vocab_size]
 	// logits = hidden @ output_weight -> [batch, seq, vocab_size]
+	fmt.Printf("[MODEL] Starting output projection...\n")
 	shape := hidden.Shape()
 	batchSize := shape[0]
 	hiddenDim := shape[2]
 
 	hiddenFlat := tensor.Reshape(hidden, []int{batchSize * seqLen, hiddenDim})
+	fmt.Printf("[MODEL] Reshaped hidden: %v\n", hiddenFlat.Shape())
+	fmt.Printf("[MODEL] Output weight shape: %v, dtype: %v\n", m.outputWeight.Shape(), m.outputWeight.DType())
+	fmt.Printf("[MODEL] Starting MatMul (this may take a while for large vocab)...\n")
 	logitsFlat := tensor.MatMul(hiddenFlat, m.outputWeight)
+	fmt.Printf("[MODEL] MatMul complete\n")
 	logits := tensor.Reshape(logitsFlat, []int{batchSize, seqLen, m.config.VocabSize})
+	fmt.Printf("[MODEL] Output projection complete, logits shape: %v\n", logits.Shape())
 
 	return logits, nil
 }

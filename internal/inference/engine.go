@@ -109,9 +109,15 @@ func (e *Engine) Generate(ctx context.Context, prompt string, opts GenerateOptio
 	// Prefill: process all prompt tokens
 	// Convert tokens to 2D array: [batch=1, seq_len]
 	tokenIDs := [][]int{tokens}
+	if DebugInference {
+		fmt.Printf("[DEBUG] Starting prefill with %d tokens...\n", len(tokens))
+	}
 	logits, err := e.model.Forward(tokenIDs, true) // useCache = true
 	if err != nil {
 		return "", fmt.Errorf("prefill failed: %w", err)
+	}
+	if DebugInference {
+		fmt.Printf("[DEBUG] Prefill forward pass complete\n")
 	}
 
 	// Extract logits for last token: [batch=1, seq=len(tokens), vocab] -> [vocab]
