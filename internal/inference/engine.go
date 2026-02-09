@@ -12,7 +12,7 @@ import (
 )
 
 // Debug flag for verbose logging
-var DebugInference = true // Enable to debug tokenization and generation
+var DebugInference = false // Enable to debug tokenization and generation
 
 // logLogitsDistribution logs detailed statistics about logits for debugging
 func (e *Engine) logLogitsDistribution(logits *tensor.Tensor, label string) {

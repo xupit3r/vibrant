@@ -142,7 +142,7 @@ func (e *Embeddings) Forward(tokenIDs [][]int) (*tensor.Tensor, error) {
 	}
 
 	// Debug: Check if different tokens produce different embeddings
-	debugEmbed := true
+	debugEmbed := false
 	if debugEmbed && batchSize == 1 && seqLen == 1 {
 		// Single token - log its embedding
 		tokenID := tokenIDs[0][0]

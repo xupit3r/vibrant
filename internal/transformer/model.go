@@ -149,7 +149,7 @@ func (m *Model) MoveToDevice(device tensor.Device) error {
 // Output: logits [batch_size, seq_len, vocab_size]
 func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error) {
 	// Debug: Track RMS convergence across all layers
-	trackRMS := true // Enable to debug where RMS convergence starts
+	trackRMS := false // Enable to debug where RMS convergence starts
 
 	if len(tokenIDs) == 0 {
 		return nil, fmt.Errorf("empty token IDs")
@@ -238,7 +238,7 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 
 	// 3. Final normalization
 	// Debug: check before and after final norm
-	debugOutputNorm := false // Enable to debug normalization convergence
+	debugOutputNorm := false // Disabled
 	if debugOutputNorm {
 		// Check input to final norm
 		hiddenData, _ := hidden.EnsureCPUData()
