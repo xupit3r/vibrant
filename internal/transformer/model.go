@@ -177,13 +177,16 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	// 2. Pass through all transformer layers
 	fmt.Printf("[MODEL] Processing %d layers...\n", len(m.layers))
 	for i, layer := range m.layers {
-		if i % 5 == 0 {
-			fmt.Printf("[MODEL] Layer %d/%d...\n", i, len(m.layers))
-		}
+		layerStart := time.Now()
+		fmt.Printf("[MODEL] Layer %d/%d starting...\n", i, len(m.layers))
+
 		hidden, err = layer.Forward(hidden, positions, useCache)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d failed: %w", i, err)
 		}
+
+		layerTime := time.Since(layerStart)
+		fmt.Printf("[MODEL] Layer %d complete in %.3fs\n", i, layerTime.Seconds())
 	}
 	fmt.Printf("[MODEL] All layers complete\n")
 
