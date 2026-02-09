@@ -99,6 +99,9 @@ func (e *Embeddings) Forward(tokenIDs [][]int) (*tensor.Tensor, error) {
 	weightShape := e.weight.Shape()
 	transposed := weightShape[0] == e.hiddenDim // true if [hidden_dim, vocab_size]
 
+	// Debug: log token IDs and whether we're transposed
+	fmt.Printf("[EMBED] Tokens: %v, transposed=%v, dtype=%v\n", tokenIDs, transposed, e.weight.DType())
+
 	// For quantized embeddings, we need At() -- but for Float32 we can use direct access
 	if e.weight.DType() == tensor.Float32 {
 		wData := e.weight.Data().([]float32)
@@ -135,6 +138,23 @@ func (e *Embeddings) Forward(tokenIDs [][]int) (*tensor.Tensor, error) {
 				}
 			}
 		}
+	}
+
+	// Debug: show statistics for first embedding vector
+	if batchSize > 0 && seqLen > 0 {
+		firstEmbedding := oData[0:e.hiddenDim]
+		sum, min, max := float32(0), firstEmbedding[0], firstEmbedding[0]
+		for _, v := range firstEmbedding {
+			sum += v
+			if v < min {
+				min = v
+			}
+			if v > max {
+				max = v
+			}
+		}
+		mean := sum / float32(e.hiddenDim)
+		fmt.Printf("[EMBED] First token embedding stats: min=%.4f, max=%.4f, mean=%.4f\n", min, max, mean)
 	}
 
 	return output, nil

@@ -8,6 +8,13 @@ import (
 	"github.com/xupit3r/vibrant/internal/tensor"
 )
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // Model represents a complete transformer language model
 type Model struct {
 	config *Config
@@ -175,10 +182,26 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	}
 
 	// 2. Pass through all transformer layers
-	fmt.Printf("[MODEL] Processing %d layers...\n", len(m.layers))
 	for i, layer := range m.layers {
 		layerStart := time.Now()
-		fmt.Printf("[MODEL] Layer %d/%d starting...\n", i, len(m.layers))
+
+		// Debug: track hidden state statistics before layer
+		if i % 10 == 0 || i == len(m.layers)-1 {
+			hiddenData, _ := hidden.EnsureCPUData()
+			hData := hiddenData.([]float32)
+			hMin, hMax, hSum := hData[0], hData[0], float32(0)
+			for _, v := range hData[:min(100, len(hData))] { // Sample first 100 values
+				if v < hMin {
+					hMin = v
+				}
+				if v > hMax {
+					hMax = v
+				}
+				hSum += v
+			}
+			hMean := hSum / float32(min(100, len(hData)))
+			fmt.Printf("[MODEL] Layer %d input: min=%.4f, max=%.4f, mean=%.4f\n", i, hMin, hMax, hMean)
+		}
 
 		hidden, err = layer.Forward(hidden, positions, useCache)
 		if err != nil {
@@ -186,17 +209,33 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 		}
 
 		layerTime := time.Since(layerStart)
-		fmt.Printf("[MODEL] Layer %d complete in %.3fs\n", i, layerTime.Seconds())
+		if i % 10 == 0 || i == len(m.layers)-1 {
+			fmt.Printf("[MODEL] Layer %d complete in %.3fs\n", i, layerTime.Seconds())
+		}
 	}
-	fmt.Printf("[MODEL] All layers complete\n")
 
 	// 3. Final normalization
-	fmt.Printf("[MODEL] Starting output norm...\n")
 	hidden, err = m.outputNorm.Forward(hidden)
 	if err != nil {
 		return nil, fmt.Errorf("output norm failed: %w", err)
 	}
-	fmt.Printf("[MODEL] Output norm complete\n")
+
+	// Debug: check hidden state after final norm
+	hiddenData, _ := hidden.EnsureCPUData()
+	hData := hiddenData.([]float32)
+	hMin, hMax, hSum := hData[0], hData[0], float32(0)
+	sampleSize := min(200, len(hData))
+	for _, v := range hData[:sampleSize] {
+		if v < hMin {
+			hMin = v
+		}
+		if v > hMax {
+			hMax = v
+		}
+		hSum += v
+	}
+	hMean := hSum / float32(sampleSize)
+	fmt.Printf("[MODEL] After final norm: min=%.4f, max=%.4f, mean=%.4f\n", hMin, hMax, hMean)
 
 	// 4. Project to vocabulary (compute logits)
 	// hidden: [batch, seq, hidden_dim], output_weight: [hidden_dim, vocab_size]
