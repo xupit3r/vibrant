@@ -234,3 +234,34 @@ While debugging, we also improved performance:
 - Original issue: `PLAN.md` Phase 11.3  
 - Previous analysis: `INFERENCE_BUG_ROOT_CAUSE.md`  
 - Causal mask fix: Commit `3eceb40`
+
+---
+
+## VALIDATION RESULTS - llama.cpp Comparison
+
+**Test**: Same model (qwen2.5-coder-3b-q4.gguf), same prompt ("Hello world"), 10 tokens
+
+**llama.cpp output**:
+```
+> Hello world
+|- Hello! How can I assist you today?
+```
+
+**Our implementation output**:
+```
+Hello world<|fim_pad|><|fim_pad|><|fim_pad|><|fim_pad|><|fim_pad|>...
+(token 128008 repeated)
+```
+
+**Verdict**: ✅ **WE HAVE A BUG** - llama.cpp works correctly, our code does not
+
+**Implication**: The identical embedding RMS we observed (0.0292) is NOT expected behavior - it's a symptom of our bug.
+
+**Next**: Debug embedding implementation to find why all decode tokens produce identical RMS.
+
+Possible bug locations:
+1. Embedding lookup logic (especially for single tokens)
+2. RMS computation (might be computing over wrong dimensions)
+3. Tensor shape handling in decode mode
+4. Weight access/dequantization in embeddings
+

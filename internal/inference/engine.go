@@ -12,7 +12,7 @@ import (
 )
 
 // Debug flag for verbose logging
-var DebugInference = false
+var DebugInference = true // Enable to debug tokenization and generation
 
 // Engine is the main inference engine for LLM generation
 type Engine struct {

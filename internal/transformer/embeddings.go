@@ -2,6 +2,7 @@ package transformer
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/xupit3r/vibrant/internal/gguf"
 	"github.com/xupit3r/vibrant/internal/tensor"
@@ -140,8 +141,24 @@ func (e *Embeddings) Forward(tokenIDs [][]int) (*tensor.Tensor, error) {
 		}
 	}
 
-	// Embedding stats debug (disabled for now)
-	// if batchSize > 0 && seqLen > 0 { ... }
+	// Debug: Check if different tokens produce different embeddings
+	debugEmbed := true
+	if debugEmbed && batchSize == 1 && seqLen == 1 {
+		// Single token - log its embedding
+		tokenID := tokenIDs[0][0]
+		embData := oData[:e.hiddenDim]
+
+		// Compute RMS for this single embedding
+		sumSq := float32(0)
+		for _, v := range embData {
+			sumSq += v * v
+		}
+		rms := float32(math.Sqrt(float64(sumSq / float32(e.hiddenDim))))
+
+		// Sample first 5 values
+		fmt.Printf("[EMBED_DEBUG] Token %d: RMS=%.6f, first5=[%.4f, %.4f, %.4f, %.4f, %.4f]\n",
+			tokenID, rms, embData[0], embData[1], embData[2], embData[3], embData[4])
+	}
 
 	return output, nil
 }
