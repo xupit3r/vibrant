@@ -14,6 +14,74 @@ import (
 // Debug flag for verbose logging
 var DebugInference = true // Enable to debug tokenization and generation
 
+// logLogitsDistribution logs detailed statistics about logits for debugging
+func (e *Engine) logLogitsDistribution(logits *tensor.Tensor, label string) {
+	logitsData, err := logits.EnsureCPUData()
+	if err != nil {
+		fmt.Printf("[DEBUG] Failed to get logits data: %v\n", err)
+		return
+	}
+
+	lData := logitsData.([]float32)
+	shape := logits.Shape()
+
+	// Extract last token logits
+	seqLen := shape[1]
+	vocabSize := shape[2]
+	lastTokenOff := (seqLen - 1) * vocabSize
+	lastTokenLogits := lData[lastTokenOff : lastTokenOff+vocabSize]
+
+	// Compute statistics
+	min, max, sum := lastTokenLogits[0], lastTokenLogits[0], float32(0)
+	for _, v := range lastTokenLogits {
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+		sum += v
+	}
+	mean := sum / float32(vocabSize)
+
+	// Find top 20 tokens
+	type TokenScore struct {
+		token int
+		score float32
+	}
+	top := make([]TokenScore, 20)
+	for i := range top {
+		top[i] = TokenScore{token: i, score: lastTokenLogits[i]}
+	}
+
+	for i := 20; i < vocabSize; i++ {
+		if lastTokenLogits[i] > top[19].score {
+			top[19] = TokenScore{token: i, score: lastTokenLogits[i]}
+			// Bubble sort to maintain order
+			for j := 18; j >= 0; j-- {
+				if top[j+1].score > top[j].score {
+					top[j], top[j+1] = top[j+1], top[j]
+				} else {
+					break
+				}
+			}
+		}
+	}
+
+	// Log statistics
+	fmt.Printf("\n[LOGITS_%s] Distribution: min=%.4f, max=%.4f, mean=%.4f, range=%.4f\n",
+		label, min, max, mean, max-min)
+
+	// Log top 20 tokens
+	fmt.Printf("[LOGITS_%s] Top 20 tokens:\n", label)
+	for i := 0; i < 20; i++ {
+		tokenText := e.tokenizer.Decode([]int{top[i].token}, true) // skipSpecialTokens=true
+		fmt.Printf("  %2d. Token %6d (%-20q): %.4f\n",
+			i+1, top[i].token, tokenText, top[i].score)
+	}
+	fmt.Printf("\n")
+}
+
 // Engine is the main inference engine for LLM generation
 type Engine struct {
 	model     *transformer.Model
@@ -87,7 +155,8 @@ func (e *Engine) Generate(ctx context.Context, prompt string, opts GenerateOptio
 	e.model.ClearCache()
 
 	// Tokenize prompt
-	tokens := e.tokenizer.Encode(prompt, true, false) // addBOS=true, addEOS=false
+	// NOTE: Testing without BOS to match llama.cpp behavior
+	tokens := e.tokenizer.Encode(prompt, false, false) // addBOS=false, addEOS=false
 	
 	if DebugInference {
 		fmt.Printf("[DEBUG] Prompt: %q\n", prompt)
@@ -115,6 +184,11 @@ func (e *Engine) Generate(ctx context.Context, prompt string, opts GenerateOptio
 	logits, err := e.model.Forward(tokenIDs, true) // useCache = true
 	if err != nil {
 		return "", fmt.Errorf("prefill failed: %w", err)
+	}
+
+	// Debug: Log logits after prefill
+	if DebugInference {
+		e.logLogitsDistribution(logits, "PREFILL")
 	}
 	if DebugInference {
 		fmt.Printf("[DEBUG] Prefill forward pass complete\n")
@@ -162,6 +236,11 @@ func (e *Engine) Generate(ctx context.Context, prompt string, opts GenerateOptio
 		logits, err = e.model.Forward(tokenIDs, true) // useCache = true
 		if err != nil {
 			return "", fmt.Errorf("decode failed at token %d: %w", i, err)
+		}
+
+		// Debug: Log logits for first few decode steps
+		if DebugInference && i < 3 {
+			e.logLogitsDistribution(logits, fmt.Sprintf("DECODE_STEP_%d", i))
 		}
 
 		// Extract logits for the generated token
