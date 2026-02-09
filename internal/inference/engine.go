@@ -317,10 +317,17 @@ func extractLastTokenLogits(logits *tensor.Tensor, shape []int) *tensor.Tensor {
 	seqLen := shape[1]
 	vocabSize := shape[2]
 
+	// Ensure logits are on CPU (sync from GPU if needed)
+	srcData, err := logits.EnsureCPUData()
+	if err != nil {
+		// Fallback to Data() if EnsureCPUData fails (shouldn't happen)
+		srcData = logits.Data()
+	}
+
 	// Extract the last token's logits from batch 0
 	// [batch=1, seq, vocab] -> [vocab]
 	result := tensor.NewTensor([]int{vocabSize}, tensor.Float32)
-	src := logits.Data().([]float32)
+	src := srcData.([]float32)
 	dst := result.Data().([]float32)
 
 	// Last token of batch 0: offset = 0*seqLen*vocabSize + (seqLen-1)*vocabSize
