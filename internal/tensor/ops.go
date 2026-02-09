@@ -480,3 +480,51 @@ func shapesMatch(a, b []int) bool {
 	}
 	return true
 }
+
+// Dequantize converts a quantized tensor to Float32
+// Returns a new tensor with Float32 dtype and the same shape
+func Dequantize(t *Tensor) *Tensor {
+	// If already Float32, return as-is
+	if t.dtype == Float32 {
+		return t
+	}
+
+	// Dispatch to type-specific dequantization
+	var result *Tensor
+	var err error
+
+	switch t.dtype {
+	case Q4_K:
+		result, err = DequantizeQ4_KTensor(t)
+	case Q5_K:
+		result, err = DequantizeQ5_KTensor(t)
+	case Q6_K:
+		result, err = DequantizeQ6_KTensor(t)
+	case Float16:
+		// Dequantize float16 to float32
+		numElements := 1
+		for _, dim := range t.shape {
+			numElements *= dim
+		}
+		f16Data := t.data.([]uint16)
+		f32Data := make([]float32, numElements)
+		for i, f16 := range f16Data {
+			f32Data[i] = float16ToFloat32(f16)
+		}
+		result = &Tensor{
+			data:   f32Data,
+			shape:  append([]int{}, t.shape...),
+			stride: append([]int{}, t.stride...),
+			dtype:  Float32,
+			device: CPU,
+		}
+	default:
+		panic(fmt.Sprintf("Dequantize not implemented for dtype %s", t.dtype))
+	}
+
+	if err != nil {
+		panic(fmt.Sprintf("Dequantization failed: %v", err))
+	}
+
+	return result
+}

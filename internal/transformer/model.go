@@ -2,6 +2,7 @@ package transformer
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/xupit3r/vibrant/internal/gguf"
 	"github.com/xupit3r/vibrant/internal/tensor"
@@ -22,6 +23,10 @@ type Model struct {
 
 	// Output projection (language modeling head)
 	outputWeight *tensor.Tensor // [hidden_dim, vocab_size]
+
+	// Cached dequantized output weight (for quantized models)
+	// This avoids repeated dequantization of the massive output matrix
+	outputWeightCache *tensor.Tensor // [hidden_dim, vocab_size] in Float32
 
 	// Target device for computation (CPU or GPU)
 	device tensor.Device
@@ -201,8 +206,31 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	hiddenFlat := tensor.Reshape(hidden, []int{batchSize * seqLen, hiddenDim})
 	fmt.Printf("[MODEL] Reshaped hidden: %v\n", hiddenFlat.Shape())
 	fmt.Printf("[MODEL] Output weight shape: %v, dtype: %v\n", m.outputWeight.Shape(), m.outputWeight.DType())
-	fmt.Printf("[MODEL] Starting MatMul (this may take a while for large vocab)...\n")
-	logitsFlat := tensor.MatMul(hiddenFlat, m.outputWeight)
+
+	// Dequantize output weight once and cache it (HUGE performance win for large vocab)
+	weightToUse := m.outputWeight
+	if m.outputWeightCache == nil && m.outputWeight.DType() != tensor.Float32 {
+		fmt.Printf("[MODEL] Output weight is quantized - dequantizing and caching (one-time cost)...\n")
+		start := time.Now()
+
+		// Dequantize the entire weight matrix
+		m.outputWeightCache = tensor.Dequantize(m.outputWeight)
+
+		elapsed := time.Since(start)
+		fmt.Printf("[MODEL] Dequantization complete in %.2fs (%.1f MB cached)\n",
+			elapsed.Seconds(), float64(m.outputWeightCache.Size()*4)/1e6)
+
+		weightToUse = m.outputWeightCache
+	} else if m.outputWeightCache != nil {
+		// Use cached dequantized version
+		fmt.Printf("[MODEL] Using cached dequantized weight (dtype: %v)\n", m.outputWeightCache.DType())
+		weightToUse = m.outputWeightCache
+	}
+
+	fmt.Printf("[MODEL] MatMul input: hidden=%v, weight=%v (dtype: %v)\n",
+		hiddenFlat.Shape(), weightToUse.Shape(), weightToUse.DType())
+	fmt.Printf("[MODEL] Starting MatMul...\n")
+	logitsFlat := tensor.MatMul(hiddenFlat, weightToUse)
 	fmt.Printf("[MODEL] MatMul complete\n")
 	logits := tensor.Reshape(logitsFlat, []int{batchSize, seqLen, m.config.VocabSize})
 	fmt.Printf("[MODEL] Output projection complete, logits shape: %v\n", logits.Shape())
