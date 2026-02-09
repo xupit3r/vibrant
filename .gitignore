@@ -38,3 +38,7 @@ debug-load
 list-tensors
 test-inference
 /vibrant
+
+# Test binaries (root directory test executables)
+test_*
+!test_*.go

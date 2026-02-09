@@ -609,14 +609,36 @@ func float32ToFloat16(f float32) uint16 {
 }
 
 func float16ToFloat32(h uint16) float32 {
-	// Simplified conversion (not full IEEE 754)
 	sign := uint32((h >> 15) & 0x1)
 	exp := uint32((h >> 10) & 0x1F)
 	mantissa := uint32(h & 0x3FF)
 
 	if exp == 0 {
-		// Zero or subnormal
-		return 0.0
+		if mantissa == 0 {
+			// True zero
+			if sign == 1 {
+				return -0.0
+			}
+			return 0.0
+		}
+		// Subnormal number - must handle properly!
+		// Subnormal float16: value = (-1)^sign * 2^(-14) * (mantissa / 1024)
+		// Convert to float32 by normalizing
+		// Find leading 1 in mantissa and adjust exponent
+		shift := uint32(0)
+		m := mantissa
+		for (m & 0x400) == 0 {
+			m <<= 1
+			shift++
+		}
+		// Remove leading 1
+		m &= 0x3FF
+		// Compute float32 exponent: -14 - shift + 127 (bias adjustment)
+		exp32 := uint32(127 - 14 - shift)
+		// Mantissa needs to be shifted left by 13 bits for float32
+		mantissa32 := m << 13
+		bits := (sign << 31) | (exp32 << 23) | mantissa32
+		return *(*float32)(unsafe.Pointer(&bits))
 	}
 	if exp == 31 {
 		// Infinity or NaN
