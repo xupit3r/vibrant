@@ -321,3 +321,85 @@ func mulGPU(a, b *Tensor) *Tensor {
 
 	return outputTensor
 }
+
+// siluGPU performs SiLU activation on GPU using Metal
+// SiLU(x) = x * sigmoid(x)
+// Returns nil if GPU execution fails (caller should fallback to CPU)
+func siluGPU(input *Tensor) *Tensor {
+	if !input.IsOnGPU() {
+		return nil
+	}
+
+	if input.dtype != Float32 {
+		return nil
+	}
+
+	size := 1
+	for _, dim := range input.shape {
+		size *= dim
+	}
+
+	// Allocate output buffer
+	outputBuf, err := input.gpuDevice.Allocate(int64(size * 4))
+	if err != nil {
+		return nil
+	}
+
+	metalDev, ok := input.gpuDevice.(*gpu.MetalDevice)
+	if !ok {
+		outputBuf.Free()
+		return nil
+	}
+	queuePtr := getMetalQueuePtr(metalDev)
+
+	// Dispatch kernel
+	kernels := input.gpuKernels.(*metal.KernelSet)
+	err = kernels.DispatchSiLU(queuePtr, metal.ElementwiseParams{
+		A:    input.gpuBuffer.MetalBuffer(),
+		C:    outputBuf.MetalBuffer(),
+		Size: uint32(size),
+	})
+
+	if err != nil {
+		outputBuf.Free()
+		return nil
+	}
+
+	input.gpuDevice.Sync()
+
+	// Create output tensor
+	outputData := make([]float32, size)
+	outputTensor := &Tensor{
+		data:       outputData,
+		shape:      append([]int{}, input.shape...),
+		stride:     append([]int{}, input.stride...),
+		dtype:      Float32,
+		device:     GPU,
+		gpuBuffer:  outputBuf,
+		gpuDevice:  input.gpuDevice,
+		gpuKernels: input.gpuKernels,
+	}
+
+	return outputTensor
+}
+
+// Public GPU operation wrappers for transformer package
+
+// RMSNormGPU performs RMS normalization on GPU (public wrapper)
+// Returns nil if GPU execution fails (caller should fallback to CPU)
+func RMSNormGPU(input, weight *Tensor, eps float32) *Tensor {
+	return rmsNormGPU(input, weight, eps)
+}
+
+// RoPEGPU performs rotary position embeddings on GPU (public wrapper)
+// Currently not implemented - returns nil to fallback to CPU
+func RoPEGPU(input *Tensor, cosTable, sinTable []float32, positions []int) *Tensor {
+	// TODO: Implement RoPE GPU kernel
+	return nil
+}
+
+// SoftmaxGPU performs softmax on GPU (public wrapper)
+// Returns nil if GPU execution fails (caller should fallback to CPU)
+func SoftmaxGPU(input *Tensor) *Tensor {
+	return softmaxGPU(input)
+}
