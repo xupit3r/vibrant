@@ -42,10 +42,14 @@ func getRAMInfo() (*RAMInfo, error) {
 			if len(fields) >= 3 {
 				inactivePages, _ = strconv.ParseInt(strings.TrimSuffix(fields[2], "."), 10, 64)
 			}
-		} else if strings.HasPrefix(line, "page size of") {
+		} else if strings.Contains(line, "page size of") {
+			// Parse "page size of NNNN bytes" from header line
 			fields := strings.Fields(line)
-			if len(fields) >= 4 {
-				pageSize, _ = strconv.ParseInt(fields[3], 10, 64)
+			for i, field := range fields {
+				if field == "of" && i+1 < len(fields) {
+					pageSize, _ = strconv.ParseInt(fields[i+1], 10, 64)
+					break
+				}
 			}
 		}
 	}
