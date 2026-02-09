@@ -148,6 +148,9 @@ func (m *Model) MoveToDevice(device tensor.Device) error {
 // Input: token IDs [batch_size, seq_len]
 // Output: logits [batch_size, seq_len, vocab_size]
 func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error) {
+	// Debug: Track RMS convergence across all layers
+	trackRMS := true // Enable to debug where RMS convergence starts
+
 	if len(tokenIDs) == 0 {
 		return nil, fmt.Errorf("empty token IDs")
 	}
@@ -177,6 +180,23 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	}
 	fmt.Printf("[MODEL] Embeddings complete, shape: %v\n", hidden.Shape())
 
+	// Debug: Check embedding RMS
+	if trackRMS {
+		embData, _ := hidden.EnsureCPUData()
+		eData := embData.([]float32)
+		sumSq := float32(0)
+		for _, v := range eData {
+			sumSq += v * v
+		}
+		rms := float32(math.Sqrt(float64(sumSq / float32(len(eData)))))
+		sum := float32(0)
+		for i := 0; i < min(200, len(eData)); i++ {
+			sum += eData[i]
+		}
+		mean := sum / float32(min(200, len(eData)))
+		fmt.Printf("[EMBEDDINGS] RMS=%.4f, mean=%.4f\n", rms, mean)
+	}
+
 	// Move embeddings to GPU if model is on GPU
 	// (embeddings are computed on CPU and need to be transferred)
 	if m.device == tensor.GPU {
@@ -193,32 +213,26 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 			return nil, fmt.Errorf("layer %d failed: %w", i, err)
 		}
 
-		// Debug: Check layer 35's output specifically
-		if i == 35 {
+		// Track RMS for every Nth layer
+		if trackRMS && (i%5 == 0 || i == len(m.layers)-1) {
 			hiddenData, _ := hidden.EnsureCPUData()
 			hData := hiddenData.([]float32)
-			hMin, hMax, hSum := hData[0], hData[0], float32(0)
-			sampleSize := min(200, len(hData))
-			for _, v := range hData[:sampleSize] {
-				if v < hMin {
-					hMin = v
-				}
-				if v > hMax {
-					hMax = v
-				}
-				hSum += v
-			}
-			hMean := hSum / float32(sampleSize)
 
-			// Sample first 10 elements to check pattern
-			fmt.Printf("[DEBUG] Layer 35 output: min=%.4f, max=%.4f, mean=%.4f, first10=[", hMin, hMax, hMean)
-			for j := 0; j < min(10, len(hData)); j++ {
-				if j > 0 {
-					fmt.Printf(", ")
-				}
-				fmt.Printf("%.2f", hData[j])
+			// Compute RMS
+			sumSq := float32(0)
+			for _, v := range hData {
+				sumSq += v * v
 			}
-			fmt.Printf("]\n")
+			rms := float32(math.Sqrt(float64(sumSq / float32(len(hData)))))
+
+			// Compute mean for reference
+			sum := float32(0)
+			for i := 0; i < min(200, len(hData)); i++ {
+				sum += hData[i]
+			}
+			mean := sum / float32(min(200, len(hData)))
+
+			fmt.Printf("[LAYER_%02d] RMS=%.2f, mean=%.2f\n", i, rms, mean)
 		}
 	}
 

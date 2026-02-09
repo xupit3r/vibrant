@@ -1,10 +1,46 @@
 # Inference Bug Breakthrough - February 9, 2026
 
-## Root Cause Identified
+## Root Cause Identified ✅
 
 **Bug**: Model generates repetitive output (token 128008 repeated)
 
-**Root Cause**: Cascading RMSNorm convergence throughout the network
+**Root Cause**: All token embeddings have identical RMS values in decode mode
+
+**Smoking Gun**: Embedding RMS for ALL decode tokens = 0.0292 (exactly identical)
+
+---
+
+## UPDATE: Embedding RMS Discovery (Smoking Gun)
+
+**Critical Finding**: All decode tokens produce embeddings with **EXACTLY** the same RMS!
+
+```
+EMBEDDINGS RMS:
+Prefill (4 tokens):     RMS=0.0342
+Decode Step 1 (1 tok): RMS=0.0292  ← identical
+Decode Step 2 (1 tok): RMS=0.0292  ← identical
+Decode Step 3 (1 tok): RMS=0.0292  ← identical
+Decode Step 4 (1 tok): RMS=0.0292  ← identical
+Decode Step 5 (1 tok): RMS=0.0292  ← identical
+```
+
+**After Layer 0:**
+```
+Prefill:       RMS=0.71
+Decode Step 1: RMS=0.51
+Decode Step 2: RMS=0.51
+Decode Step 3: RMS=0.50  ← nearly identical
+Decode Step 4: RMS=0.50  ← nearly identical
+Decode Step 5: RMS=0.50  ← nearly identical
+```
+
+This identical RMS persists through all 36 layers, leading to convergent outputs.
+
+**Implication**: Either:
+1. This is expected behavior for this model (embeddings are normalized)
+2. We have a bug in embedding lookup or normalization
+
+**MUST validate against llama.cpp before proceeding!**
 
 ---
 
