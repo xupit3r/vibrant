@@ -27,7 +27,7 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 
 ✅ **Feature Complete** - Agentic code assistant with GPU acceleration!
 
-**Current Phase**: Phase 11.3 - CUDA GPU Support ✅ **PHASE 2 COMPLETE!**
+**Current Phase**: Phase 10.11 - Chat Templates, Cache Warming & Fused Dequant ✅ **COMPLETE**
 
 **GPU Backend**:
 - ✅ Phase 11.1: Metal GPU support for Apple Silicon (complete, 6.4x speedup)
@@ -58,12 +58,13 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 - Large ops (512×512): **6.4x GPU speedup**
 - Validated: Zero error on critical decode path
 
-**Recent Improvements** (Phase 10.10):
-- ✅ Fixed critical Q5_K quantization bug (inference blocker)
-- ✅ Fixed integration test infrastructure (auto-builds binary)
-- ✅ Fixed inspect-gguf build failure
-- ✅ Verified complete quantization support (Q4_K, Q5_K, Q6_K)
-- ✅ All 200+ tests passing, no regressions
+**Recent Improvements** (Phase 10.11):
+- ✅ Chat template support (ChatML, Llama 3, plain text with auto-detection)
+- ✅ Special token encoding for `<|...|>` tokens in chat prompts
+- ✅ Weight cache warming (eliminates cold-start penalty on first inference)
+- ✅ Fused dequant-transpose (50% memory reduction per weight)
+- ✅ Debug output cleanup (no more spam on every forward pass)
+- ✅ All 230+ tests passing, no regressions
 
 **Note on LLM Inference**: Currently uses a mock engine by default due to go-llama.cpp requiring manual setup (git submodules). This is perfect for development and testing. For real inference, we recommend using Ollama or manual vendor setup. See [docs/llama-setup.md](docs/llama-setup.md) for details.
 
@@ -80,6 +81,7 @@ Vibrant is a command-line tool that brings AI-powered coding assistance directly
 - ✅ **Phase 10**: Pure Go Inference Engine (no dependencies!)
 - ✅ **Phase 11.1**: GPU Backend Foundation (Metal on Apple Silicon)
 - ✅ **Phase 11.3**: CUDA GPU Support (NVIDIA GPUs on Linux)
+- ✅ **Phase 10.11**: Chat Templates, Cache Warming & Fused Dequant-Transpose
 
 ### GPU Acceleration (Phase 11.1 & 11.3)
 

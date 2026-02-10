@@ -608,6 +608,41 @@ func BenchmarkMatMul_Transformer(b *testing.B) {
 - **Optional**: Assembly for SIMD (can use pure Go initially)
 - **Testing**: NumPy/PyTorch for generating reference data
 
+## Fused Dequant-Transpose
+
+The `internal/tensor/dequant_transpose.go` file provides fused functions that
+dequantize quantized tensors directly into transposed layout, eliminating the
+intermediate full-size allocation that the separate dequant+transpose path requires.
+
+### Functions
+
+```go
+func DequantTransposeQ4K(t *Tensor) (*Tensor, error)
+func DequantTransposeQ5K(t *Tensor) (*Tensor, error)
+func DequantTransposeQ6K(t *Tensor) (*Tensor, error)
+```
+
+### Algorithm
+
+1. Allocate a single `[N, M]` float32 result tensor
+2. For each quantization block (256 elements):
+   a. Parse the block from raw bytes
+   b. Dequantize into a small local buffer (1KB, stack-friendly)
+   c. Scatter-write the 256 values to their transposed positions
+3. Mark result as transposed
+
+### Memory Savings
+
+| Tensor Size | Separate Path | Fused Path | Savings |
+|-------------|---------------|------------|---------|
+| 3072×3072   | 2 × 36 MB     | 1 × 36 MB | 50%     |
+| 3072×8192   | 2 × 96 MB     | 1 × 96 MB | 50%     |
+
+### Integration
+
+`GetOrDequantTranspose()` automatically uses the fused path for 2D Q4_K/Q5_K/Q6_K
+tensors and falls back to separate dequant+transpose for other cases.
+
 ## Future Optimizations
 
 1. **Assembly micro-kernels** for hot paths (matmul inner loops)

@@ -103,6 +103,31 @@ return nil, fmt.Errorf("no model loaded")
 return engine.GenerateStream(ctx, prompt, opts)
 }
 
+// FormatPrompt formats a system+user prompt using the loaded model's chat template.
+func (m *Manager) FormatPrompt(system, user string) string {
+m.mu.Lock()
+engine := m.engine
+m.mu.Unlock()
+
+if engine == nil {
+// No model loaded, fall back to plain text
+if system != "" {
+return system + "\n\n" + user
+}
+return user
+}
+
+if ce, ok := engine.(*CustomEngine); ok {
+return ce.FormatPrompt(system, user)
+}
+
+// Non-custom engine fallback
+if system != "" {
+return system + "\n\n" + user
+}
+return user
+}
+
 // CurrentModel returns the currently loaded model info
 func (m *Manager) CurrentModel() *model.ModelInfo {
 m.mu.Lock()

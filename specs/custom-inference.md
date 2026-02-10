@@ -315,6 +315,85 @@ func sampleMultinomial(logits *tensor.Tensor, rng *rand.Rand) int {
 }
 ```
 
+## Chat Template Support
+
+The inference engine auto-detects and applies model-specific chat templates.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│              NewEngine()                     │
+│                                              │
+│  1. Parse GGUF                               │
+│  2. Load model + tokenizer                   │
+│  3. Detect chat template from GGUF metadata  │
+│  4. Register stop tokens per template        │
+│  5. Warm weight cache                        │
+└─────────────────────────────────────────────┘
+```
+
+### Supported Formats
+
+| Format | Models | Detection | Stop Token |
+|--------|--------|-----------|------------|
+| ChatML | Qwen, Yi | `<\|im_start\|>` in template | `<\|im_end\|>` |
+| Llama 3 | Llama 3/3.1 | `<\|start_header_id\|>` in template | `<\|eot_id\|>` |
+| Plain text | Base models | Fallback | EOS only |
+
+### Chat Template Package (`internal/chat/`)
+
+```go
+// Auto-detect from raw GGUF template string
+ct := chat.NewChatTemplate(rawTemplate)
+
+// Format messages
+prompt := ct.FormatSimple("You are helpful.", "Write hello world in Go")
+
+// Or multi-turn
+prompt := ct.Format([]chat.Message{
+    {Role: "system", Content: "You are helpful."},
+    {Role: "user", Content: "What is 2+2?"},
+    {Role: "assistant", Content: "4"},
+    {Role: "user", Content: "And 3+3?"},
+})
+```
+
+### Integration Flow
+
+1. **Engine initialization**: `NewEngine()` reads `tokenizer.chat_template` from GGUF
+2. **Stop tokens**: Template stop token + EOS token added to config
+3. **Prompt formatting**: `FormatPrompt()` on CustomEngine/Manager applies template
+4. **Ask command**: `buildPromptWithContext()` calls `llmMgr.FormatPrompt()`
+
+## Weight Cache Warming
+
+At model load time, `WarmWeightCache()` pre-dequantizes and transposes all quantized
+weight matrices. This eliminates the cold-cache penalty on the first forward pass.
+
+```go
+// Called automatically in NewEngine() after model creation
+model.WarmWeightCache()
+```
+
+- Iterates all layers, calling `GetOrDequantTranspose()` on each weight tensor
+- Also dequantizes the output weight matrix
+- One-time cost at load (~5-13s for Qwen2.5-3B)
+
+## Fused Dequant-Transpose
+
+`GetOrDequantTranspose()` uses fused functions that dequantize directly into transposed
+layout, reducing peak memory by ~50% per weight (one allocation instead of two):
+
+```go
+// Standard: dequant (alloc N*M) → transpose (alloc N*M) → discard first
+// Fused:    alloc N*M → dequant blocks → scatter-write to transposed positions
+```
+
+Supported: `DequantTransposeQ4K`, `DequantTransposeQ5K`, `DequantTransposeQ6K`
+
+Falls back to separate dequant+transpose for non-2D tensors or unsupported types.
+
 ## Performance Optimizations
 
 ### 1. Prefill vs Decode Optimization

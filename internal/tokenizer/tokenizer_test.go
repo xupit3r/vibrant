@@ -659,3 +659,114 @@ func BenchmarkIDToToken(b *testing.B) {
 		_ = tok.IDToToken(15)
 	}
 }
+
+// createMockTokenizerWithSpecialTokens creates a tokenizer that has <|...|> special tokens in its vocab
+func createMockTokenizerWithSpecialTokens() *Tokenizer {
+	t := createMockTokenizer()
+
+	// Add special tokens for ChatML and Llama3
+	specialTokens := []string{
+		"<|im_start|>", // 17
+		"<|im_end|>",   // 18
+		"<|begin_of_text|>",    // 19
+		"<|start_header_id|>",  // 20
+		"<|end_header_id|>",    // 21
+		"<|eot_id|>",          // 22
+	}
+
+	for _, st := range specialTokens {
+		id := len(t.tokens)
+		t.tokens = append(t.tokens, st)
+		t.vocab[st] = id
+		t.scores = append(t.scores, 0.0)
+	}
+
+	return t
+}
+
+func TestEncodeSpecialTokens(t *testing.T) {
+	tok := createMockTokenizerWithSpecialTokens()
+
+	// Each special token should encode to exactly one token ID
+	tests := []struct {
+		token    string
+		expected int
+	}{
+		{"<|im_start|>", 17},
+		{"<|im_end|>", 18},
+		{"<|eot_id|>", 22},
+	}
+
+	for _, tt := range tests {
+		ids := tok.Encode(tt.token, false, false)
+		if len(ids) != 1 {
+			t.Errorf("Encode(%q) produced %d tokens, expected 1: %v", tt.token, len(ids), ids)
+			continue
+		}
+		if ids[0] != tt.expected {
+			t.Errorf("Encode(%q) = [%d], expected [%d]", tt.token, ids[0], tt.expected)
+		}
+	}
+}
+
+func TestEncodeChatMLPrompt(t *testing.T) {
+	tok := createMockTokenizerWithSpecialTokens()
+
+	prompt := "<|im_start|>user\nhello<|im_end|>\n<|im_start|>assistant\n"
+	ids := tok.Encode(prompt, false, false)
+
+	// Should contain the special token IDs
+	foundImStart := 0
+	foundImEnd := 0
+	for _, id := range ids {
+		if id == 17 { // <|im_start|>
+			foundImStart++
+		}
+		if id == 18 { // <|im_end|>
+			foundImEnd++
+		}
+	}
+
+	if foundImStart != 2 {
+		t.Errorf("expected 2 <|im_start|> tokens, found %d in %v", foundImStart, ids)
+	}
+	if foundImEnd != 1 {
+		t.Errorf("expected 1 <|im_end|> token, found %d in %v", foundImEnd, ids)
+	}
+}
+
+func TestEncodeWithSpecialTokensPreservesRegularText(t *testing.T) {
+	tok := createMockTokenizerWithSpecialTokens()
+
+	// Text with no special tokens should work the same as before
+	ids1 := tok.Encode("hello", false, false)
+	ids2 := tok.encodeBPE("hello", false, false)
+
+	if len(ids1) != len(ids2) {
+		t.Errorf("special token path changed regular text encoding: %v vs %v", ids1, ids2)
+		return
+	}
+	for i := range ids1 {
+		if ids1[i] != ids2[i] {
+			t.Errorf("special token path changed regular text encoding at pos %d: %d vs %d", i, ids1[i], ids2[i])
+		}
+	}
+}
+
+func TestEncodeSpecialTokenBOS(t *testing.T) {
+	tok := createMockTokenizerWithSpecialTokens()
+
+	// With BOS, special token text
+	ids := tok.Encode("<|im_start|>", true, false)
+
+	if len(ids) != 2 {
+		t.Errorf("expected 2 tokens (BOS + special), got %d: %v", len(ids), ids)
+		return
+	}
+	if ids[0] != tok.BOSID() {
+		t.Errorf("first token should be BOS (%d), got %d", tok.BOSID(), ids[0])
+	}
+	if ids[1] != 17 {
+		t.Errorf("second token should be <|im_start|> (17), got %d", ids[1])
+	}
+}

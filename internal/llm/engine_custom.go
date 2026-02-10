@@ -92,6 +92,19 @@ func (e *CustomEngine) Close() error {
 	return e.engine.Close()
 }
 
+// FormatPrompt applies the model's chat template to format a system+user prompt.
+// Falls back to plain text if no chat template was detected.
+func (e *CustomEngine) FormatPrompt(system, user string) string {
+	if tmpl := e.engine.ChatTemplate(); tmpl != nil {
+		return tmpl.FormatSimple(system, user)
+	}
+	// Fallback: plain concatenation
+	if system != "" {
+		return system + "\n\n" + user
+	}
+	return user
+}
+
 // String returns a string representation of the engine
 func (e *CustomEngine) String() string {
 	return fmt.Sprintf("CustomEngine{path: %s, type: pure-go}", e.path)

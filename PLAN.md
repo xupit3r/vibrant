@@ -655,13 +655,44 @@ Build a production-grade LLM inference engine from scratch in pure Go, giving Vi
 - Performance optimizations working correctly
 - See [TASK_COMPLETION_SUMMARY.md](./TASK_COMPLETION_SUMMARY.md) for complete details
 
-#### Phase 10.11: Continued Performance Optimization ⏳ NEXT
-- [ ] **Priority 1**: Fix cache thrashing for pre-transpose optimization
-  - [ ] Implement layer-aware LRU eviction
-  - [ ] Increase default cache size (8GB → 32GB)
-  - [ ] Achieve expected 4x speedup
-- [ ] **Priority 2**: Cache dequantized weights (20% additional speedup)
-- [ ] **Priority 3**: Reduce allocations (10% additional speedup)
+#### Phase 10.11: Chat Templates, Cache Warming & Fused Dequant ✅ COMPLETE
+- [x] **Chat template support** (multi-format, auto-detect from GGUF metadata)
+  - [x] ChatML format (Qwen, Yi models)
+  - [x] Llama 3/3.1 format
+  - [x] Plain text fallback for base models
+  - [x] Auto-detection from `tokenizer.chat_template` GGUF metadata key
+  - [x] Special token encoding (pre-tokenization split for `<|...|>` tokens)
+  - [x] Stop token detection per template (e.g. `<|im_end|>`, `<|eot_id|>`)
+  - [x] Wired through inference engine → llm.Manager → ask command
+- [x] **Cache warming at model load** (eliminate cold-start penalty)
+  - [x] `WarmWeightCache()` pre-dequantizes all quantized weights at load time
+  - [x] Covers all 253 weight matrices (7 per layer × 36 layers + output)
+  - [x] Called automatically in `NewEngine()` after model creation
+- [x] **Fused dequant-transpose** (reduce memory pressure)
+  - [x] `DequantTransposeQ4K/Q5K/Q6K` - single allocation instead of two
+  - [x] Dequantize blocks into local buffer, scatter-write to transposed positions
+  - [x] Integrated into `GetOrDequantTranspose()` with separate path fallback
+  - [x] Benchmarks comparing fused vs separate paths
+- [x] **Debug output cleanup** (gate `[MODEL]` prints behind `debugForward` flag)
+- [x] **New `internal/chat/` package** for chat template types (cycle-free)
+
+**Deliverable**: Coherent model output + faster cold start + reduced memory pressure ✅
+
+**New/Modified Files**:
+- `internal/chat/template.go` - Chat template formatter with auto-detection
+- `internal/chat/template_test.go` - 10 tests for all template formats
+- `internal/tensor/dequant_transpose.go` - Fused dequant-transpose for Q4K/Q5K/Q6K
+- `internal/tensor/dequant_transpose_test.go` - Correctness tests + benchmarks
+- `internal/tokenizer/bpe.go` - Special token pre-tokenization split
+- `internal/inference/engine.go` - Chat template detection, stop tokens, cache warming
+- `internal/llm/engine_custom.go` - FormatPrompt method
+- `internal/llm/manager.go` - FormatPrompt delegation
+- `cmd/vibrant/commands/ask.go` - Uses chat template for prompt formatting
+- `internal/gguf/metadata.go` - KeyChatTemplate constant
+- `internal/gguf/helpers.go` - GetChatTemplate() method
+- `internal/transformer/model.go` - WarmWeightCache(), debug cleanup
+
+#### Phase 10.12: Continued Performance Optimization ⏳ NEXT
 - [ ] Memory pooling and tensor reuse
 - [ ] Ring buffer KV-cache (O(1) vs O(n²) updates)
 - [ ] Flash Attention implementation

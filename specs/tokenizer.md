@@ -379,6 +379,51 @@ func TestEncode_WithSpecialTokens(t *testing.T) {
 }
 ```
 
+## Special Token Encoding (Chat Templates)
+
+### Problem
+
+Special tokens like `<|im_start|>`, `<|im_end|>`, `<|eot_id|>` used in chat templates
+must encode as single token IDs. The standard BPE path splits them into individual
+characters (`<`, `|`, `i`, `m`, ...) which may not merge back correctly.
+
+### Solution: Pre-tokenization Split
+
+When the input text contains `<|` (a cheap check), the encoder uses
+`encodeWithSpecialTokenSplit()` which:
+
+1. **Lazily builds** a sorted list of special tokens from the vocab (tokens matching `<|...|>`)
+2. **Scans** the text for occurrences of known special tokens
+3. **Splits** text into alternating segments: `[regular_text, special_token, regular_text, ...]`
+4. **Encodes** regular segments through the standard BPE path
+5. **Looks up** special token IDs directly via `t.vocab[]`
+
+```go
+// Cached lazily on first use
+type Tokenizer struct {
+    // ... existing fields ...
+    specialTokens []string // sorted by length descending
+}
+
+// Called automatically when text contains "<|"
+func (t *Tokenizer) encodeWithSpecialTokenSplit(text string, addBOS, addEOS bool) []int
+```
+
+### Example
+
+```
+Input: "<|im_start|>user\nhello<|im_end|>\n"
+
+Split segments:
+  1. ""              → (empty, skip)
+  2. "<|im_start|>"  → lookup: token ID 151644
+  3. "user\nhello"   → BPE encode: [882, 198, 15339]
+  4. "<|im_end|>"    → lookup: token ID 151645
+  5. "\n"            → BPE encode: [198]
+
+Result: [151644, 882, 198, 15339, 151645, 198]
+```
+
 ## Limitations
 
 1. **Byte-level BPE only**: Does not support character-level or SentencePiece

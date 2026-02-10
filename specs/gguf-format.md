@@ -515,10 +515,17 @@ const (
     KeyTokenizerBOSID   = "tokenizer.ggml.bos_token_id"
     KeyTokenizerEOSID   = "tokenizer.ggml.eos_token_id"
     KeyTokenizerPADID   = "tokenizer.ggml.padding_token_id"
+    KeyChatTemplate     = "tokenizer.chat_template"           // Chat template (Jinja2)
 )
 ```
 
 ### Helper Functions
+
+```go
+// GetChatTemplate returns the raw chat template string from GGUF metadata.
+// Used for auto-detecting the model's expected prompt format (ChatML, Llama3, etc.)
+func (g *GGUFFile) GetChatTemplate() (string, bool)
+```
 
 ```go
 // GetArchitecture returns the model architecture (llama, qwen, etc.)

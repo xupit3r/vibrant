@@ -64,7 +64,27 @@ type GenerateOptions struct {
 }
 ```
 
+## Custom Pure Go Engine (Phase 10+)
+
+The default engine is now a pure Go inference engine (`internal/inference/`). No CGO or external
+dependencies required.
+
+### Chat Template Support (Phase 10.11)
+
+The engine auto-detects the model's chat template from GGUF metadata and applies it during
+prompt formatting. Supported formats: ChatML, Llama 3, plain text fallback.
+
+```go
+// FormatPrompt applies the model's chat template
+prompt := llmMgr.FormatPrompt(systemPrompt, userQuestion)
+
+// Or directly via the engine
+prompt := engine.ChatTemplate().FormatSimple(system, user)
+```
+
+See `specs/custom-inference.md` for full details.
+
 ## Status
-- **Current**: Fully implemented with llama.cpp enabled by default
-- **Last Updated**: 2026-01-31
-- **Implementation**: Phase 3 (complete)
+- **Current**: Pure Go engine with chat templates, cache warming, fused dequant
+- **Last Updated**: 2026-02-10
+- **Implementation**: Phase 10.11 (complete)

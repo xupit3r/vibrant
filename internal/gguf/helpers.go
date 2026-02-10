@@ -117,6 +117,14 @@ func (g *GGUFFile) GetMerges() []string {
 	return nil
 }
 
+// GetChatTemplate returns the raw chat template string from GGUF metadata
+func (g *GGUFFile) GetChatTemplate() (string, bool) {
+	if tmpl, ok := g.Metadata[KeyChatTemplate].(string); ok {
+		return tmpl, true
+	}
+	return "", false
+}
+
 // convertToInt converts various integer types to int
 func convertToInt(val interface{}) *int {
 	if val == nil {

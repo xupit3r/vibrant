@@ -29,6 +29,10 @@ type Tokenizer struct {
 
 	// Model type (e.g., "gpt2", "llama")
 	modelType string
+
+	// Cached list of special tokens (e.g. "<|im_start|>", "<|eot_id|>")
+	// Built lazily on first use by scanning the vocab.
+	specialTokens []string
 }
 
 // NewTokenizer creates a new empty tokenizer

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/xupit3r/vibrant/internal/chat"
 	"github.com/xupit3r/vibrant/internal/gguf"
 	"github.com/xupit3r/vibrant/internal/tensor"
 	"github.com/xupit3r/vibrant/internal/tokenizer"
@@ -84,10 +85,11 @@ func (e *Engine) logLogitsDistribution(logits *tensor.Tensor, label string) {
 
 // Engine is the main inference engine for LLM generation
 type Engine struct {
-	model     *transformer.Model
-	tokenizer *tokenizer.Tokenizer
-	sampler   *Sampler
-	config    *Config
+	model        *transformer.Model
+	tokenizer    *tokenizer.Tokenizer
+	sampler      *Sampler
+	config       *Config
+	chatTemplate *chat.ChatTemplate
 }
 
 // Config holds inference configuration parameters
@@ -127,6 +129,24 @@ func NewEngine(ggufPath string, config *Config) (*Engine, error) {
 		return nil, fmt.Errorf("failed to load tokenizer: %w", err)
 	}
 
+	// Detect chat template from GGUF metadata
+	var chatTmpl *chat.ChatTemplate
+	if rawTmpl, ok := ggufFile.GetChatTemplate(); ok {
+		chatTmpl = chat.NewChatTemplate(rawTmpl)
+	} else {
+		chatTmpl = chat.NewChatTemplate("")
+	}
+
+	// Add stop tokens: template-specific stop token + EOS
+	if chatTmpl.StopToken != "" {
+		if stopID := tok.TokenToID(chatTmpl.StopToken); stopID >= 0 {
+			config.StopTokens = append(config.StopTokens, stopID)
+		}
+	}
+	if eosID := tok.EOSID(); eosID >= 0 {
+		config.StopTokens = append(config.StopTokens, eosID)
+	}
+
 	// Move model to device if requested
 	if config.Device == tensor.GPU {
 		fmt.Println("Moving model weights to GPU...")
@@ -138,14 +158,18 @@ func NewEngine(ggufPath string, config *Config) (*Engine, error) {
 		}
 	}
 
+	// Warm weight cache to eliminate cold-start penalty
+	model.WarmWeightCache()
+
 	// Create sampler
 	sampler := NewSampler(config.Temperature, config.TopP, config.TopK, config.Seed)
 
 	return &Engine{
-		model:     model,
-		tokenizer: tok,
-		sampler:   sampler,
-		config:    config,
+		model:        model,
+		tokenizer:    tok,
+		sampler:      sampler,
+		config:       config,
+		chatTemplate: chatTmpl,
 	}, nil
 }
 
@@ -336,6 +360,11 @@ func (e *Engine) GenerateStream(ctx context.Context, prompt string, opts Generat
 func (e *Engine) TokenCount(text string) int {
 	tokens := e.tokenizer.Encode(text, false, false) // no special tokens for counting
 	return len(tokens)
+}
+
+// ChatTemplate returns the detected chat template (may be plain-text fallback).
+func (e *Engine) ChatTemplate() *chat.ChatTemplate {
+	return e.chatTemplate
 }
 
 // Close releases resources held by the engine

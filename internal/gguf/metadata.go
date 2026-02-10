@@ -95,6 +95,7 @@ const (
 	KeyTokenizerBOSID        = "tokenizer.ggml.bos_token_id"               // BOS token ID
 	KeyTokenizerEOSID        = "tokenizer.ggml.eos_token_id"               // EOS token ID
 	KeyTokenizerPADID        = "tokenizer.ggml.padding_token_id"           // Padding token ID
+	KeyChatTemplate          = "tokenizer.chat_template"                   // Chat template (Jinja2)
 )
 
 // TensorInfo describes a tensor in the GGUF file

@@ -68,6 +68,9 @@ vibrant/
 │   │   ├── prompts.go           # Prompt templates
 │   │   └── templates/           # Prompt template files
 │   │
+│   ├── chat/
+│   │   └── template.go          # Chat template formatting (ChatML, Llama3, plain)
+│   │
 │   ├── model/
 │   │   ├── manager.go           # Model lifecycle management
 │   │   ├── inference.go         # Inference wrapper

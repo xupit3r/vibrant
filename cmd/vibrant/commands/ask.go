@@ -134,8 +134,8 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	fmt.Println("Generating response...")
 	fmt.Println()
 	
-	// Build prompt with context
-	prompt := buildPromptWithContext(question, codeContext)
+	// Build prompt with context using model's chat template
+	prompt := buildPromptWithContext(question, codeContext, llmMgr)
 	
 	// Generate response
 	ctx := context.Background()
@@ -187,19 +187,16 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func buildPromptWithContext(question string, codeContext *ctxpkg.Context) string {
-	var sb strings.Builder
-	
-	sb.WriteString("You are Vibrant, a helpful coding assistant. Answer the following question concisely and accurately.\n\n")
-	
-	// Add context if available
+func buildPromptWithContext(question string, codeContext *ctxpkg.Context, llmMgr *llm.Manager) string {
+	systemPrompt := "You are Vibrant, a helpful coding assistant. Answer the following question concisely and accurately."
+
+	// Build user message with optional code context
+	var userMsg strings.Builder
 	if codeContext != nil && len(codeContext.Files) > 0 {
-		sb.WriteString(codeContext.FormatContext())
-		sb.WriteString("\n\n")
+		userMsg.WriteString(codeContext.FormatContext())
+		userMsg.WriteString("\n\n")
 	}
-	
-	sb.WriteString(fmt.Sprintf("Question: %s\n\n", question))
-	sb.WriteString("Answer:")
-	
-	return sb.String()
+	userMsg.WriteString(question)
+
+	return llmMgr.FormatPrompt(systemPrompt, userMsg.String())
 }

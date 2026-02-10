@@ -1,6 +1,7 @@
 package tokenizer
 
 import (
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -20,6 +21,16 @@ func (t *Tokenizer) Encode(text string, addBOS, addEOS bool) []int {
 		return result
 	}
 
+	// If text contains special token markers, use the special-token-aware path
+	if strings.Contains(text, "<|") {
+		return t.encodeWithSpecialTokenSplit(text, addBOS, addEOS)
+	}
+
+	return t.encodeBPE(text, addBOS, addEOS)
+}
+
+// encodeBPE encodes text using the standard BPE algorithm (no special token handling).
+func (t *Tokenizer) encodeBPE(text string, addBOS, addEOS bool) []int {
 	// GPT2-style preprocessing: replace spaces and newlines with special characters
 	// This is required for Qwen and other GPT2-based tokenizers
 	if t.modelType == "gpt2" {
@@ -95,6 +106,76 @@ func (t *Tokenizer) Encode(text string, addBOS, addEOS bool) []int {
 				ids = append(ids, t.unkID)
 			}
 		}
+	}
+
+	if addEOS && t.eosID >= 0 {
+		ids = append(ids, t.eosID)
+	}
+
+	return ids
+}
+
+// initSpecialTokens lazily builds the sorted list of special tokens from the vocab.
+func (t *Tokenizer) initSpecialTokens() {
+	if t.specialTokens != nil {
+		return
+	}
+	for token := range t.vocab {
+		if strings.HasPrefix(token, "<|") && strings.HasSuffix(token, "|>") {
+			t.specialTokens = append(t.specialTokens, token)
+		}
+	}
+	// Sort by length descending so longer tokens match first
+	sort.Slice(t.specialTokens, func(i, j int) bool {
+		return len(t.specialTokens[i]) > len(t.specialTokens[j])
+	})
+}
+
+// encodeWithSpecialTokenSplit splits text at special token boundaries,
+// encodes regular text segments through BPE, and looks up special tokens directly.
+func (t *Tokenizer) encodeWithSpecialTokenSplit(text string, addBOS, addEOS bool) []int {
+	t.initSpecialTokens()
+
+	ids := make([]int, 0, 64)
+	if addBOS && t.bosID >= 0 {
+		ids = append(ids, t.bosID)
+	}
+
+	// Walk through the text, finding special tokens
+	for len(text) > 0 {
+		// Find the earliest occurring special token
+		bestIdx := -1
+		bestPos := len(text)
+		for i, st := range t.specialTokens {
+			pos := strings.Index(text, st)
+			if pos != -1 && pos < bestPos {
+				bestPos = pos
+				bestIdx = i
+			}
+		}
+
+		if bestIdx == -1 {
+			// No more special tokens; encode the rest through BPE
+			if text != "" {
+				sub := t.encodeBPE(text, false, false)
+				ids = append(ids, sub...)
+			}
+			break
+		}
+
+		// Encode text before the special token
+		if bestPos > 0 {
+			sub := t.encodeBPE(text[:bestPos], false, false)
+			ids = append(ids, sub...)
+		}
+
+		// Look up the special token directly
+		st := t.specialTokens[bestIdx]
+		if id, ok := t.vocab[st]; ok {
+			ids = append(ids, id)
+		}
+
+		text = text[bestPos+len(st):]
 	}
 
 	if addEOS && t.eosID >= 0 {

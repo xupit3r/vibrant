@@ -554,19 +554,37 @@ func (t *Tensor) GetOrDequantTranspose() *Tensor {
 	// Cache miss - need to dequantize and transpose
 	atomic.AddUint64(&DefaultWeightCache.misses, 1)
 
-	// Dequantize to Float32
-	dequant := dequantIfNeeded(t)
+	// Try fused dequant-transpose (single allocation) for 2D quantized tensors
+	var fused *Tensor
+	var err error
+	if len(t.shape) == 2 {
+		switch t.dtype {
+		case Q4_K:
+			fused, err = DequantTransposeQ4K(t)
+		case Q5_K:
+			fused, err = DequantTransposeQ5K(t)
+		case Q6_K:
+			fused, err = DequantTransposeQ6K(t)
+		}
+	}
 
-	// Pre-transpose for matmul (B matrix is accessed column-wise)
-	transposed := dequant.Transpose()
-	transposed.MarkTransposed()
+	var result *Tensor
+	if fused != nil && err == nil {
+		result = fused
+	} else {
+		// Fallback: separate dequant + transpose
+		dequant := dequantIfNeeded(t)
+		transposed := dequant.Transpose()
+		transposed.MarkTransposed()
+		result = transposed
+	}
 
 	// Register with cache manager (may evict others)
-	DefaultWeightCache.Register(t, transposed)
-	t.dequantCache = transposed
+	DefaultWeightCache.Register(t, result)
+	t.dequantCache = result
 	t.cacheGen = nextCacheGen()
 
-	return transposed
+	return result
 }
 
 // Close releases resources (unmaps memory if needed)

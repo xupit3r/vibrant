@@ -3,7 +3,6 @@ package transformer
 import (
 	"fmt"
 	"math"
-	"time"
 
 	"github.com/xupit3r/vibrant/internal/gguf"
 	"github.com/xupit3r/vibrant/internal/tensor"
@@ -48,7 +47,7 @@ func NewModel(ggufFile *gguf.GGUFFile) (*Model, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	fmt.Printf("Loaded config: %s\n", cfg.String())
+	// fmt.Printf("Loaded config: %s\n", cfg.String())
 
 	// Create embeddings layer
 	embeddings, err := NewEmbeddings(ggufFile, cfg)
@@ -372,42 +371,40 @@ func (m *Model) Forward(tokenIDs [][]int, useCache bool) (*tensor.Tensor, error)
 	// 4. Project to vocabulary (compute logits)
 	// hidden: [batch, seq, hidden_dim], output_weight: [hidden_dim, vocab_size]
 	// logits = hidden @ output_weight -> [batch, seq, vocab_size]
-	fmt.Printf("[MODEL] Starting output projection...\n")
+	debugForward := false // Enable to debug output projection
+
+	if debugForward {
+		fmt.Printf("[MODEL] Starting output projection...\n")
+	}
 	shape := hidden.Shape()
 	batchSize := shape[0]
 	hiddenDim := shape[2]
 
 	hiddenFlat := tensor.Reshape(hidden, []int{batchSize * seqLen, hiddenDim})
-	fmt.Printf("[MODEL] Reshaped hidden: %v\n", hiddenFlat.Shape())
-	fmt.Printf("[MODEL] Output weight shape: %v, dtype: %v\n", m.outputWeight.Shape(), m.outputWeight.DType())
+	if debugForward {
+		fmt.Printf("[MODEL] Reshaped hidden: %v\n", hiddenFlat.Shape())
+		fmt.Printf("[MODEL] Output weight shape: %v, dtype: %v\n", m.outputWeight.Shape(), m.outputWeight.DType())
+	}
 
 	// Dequantize output weight once and cache it (HUGE performance win for large vocab)
 	weightToUse := m.outputWeight
 	if m.outputWeightCache == nil && m.outputWeight.DType() != tensor.Float32 {
-		fmt.Printf("[MODEL] Output weight is quantized - dequantizing and caching (one-time cost)...\n")
-		start := time.Now()
-
 		// Dequantize the entire weight matrix
 		m.outputWeightCache = tensor.Dequantize(m.outputWeight)
-
-		elapsed := time.Since(start)
-		fmt.Printf("[MODEL] Dequantization complete in %.2fs (%.1f MB cached)\n",
-			elapsed.Seconds(), float64(m.outputWeightCache.Size()*4)/1e6)
-
 		weightToUse = m.outputWeightCache
 	} else if m.outputWeightCache != nil {
-		// Use cached dequantized version
-		fmt.Printf("[MODEL] Using cached dequantized weight (dtype: %v)\n", m.outputWeightCache.DType())
 		weightToUse = m.outputWeightCache
 	}
 
-	fmt.Printf("[MODEL] MatMul input: hidden=%v, weight=%v (dtype: %v)\n",
-		hiddenFlat.Shape(), weightToUse.Shape(), weightToUse.DType())
-	fmt.Printf("[MODEL] Starting MatMul...\n")
+	if debugForward {
+		fmt.Printf("[MODEL] MatMul input: hidden=%v, weight=%v (dtype: %v)\n",
+			hiddenFlat.Shape(), weightToUse.Shape(), weightToUse.DType())
+	}
 	logitsFlat := tensor.MatMul(hiddenFlat, weightToUse)
-	fmt.Printf("[MODEL] MatMul complete\n")
 	logits := tensor.Reshape(logitsFlat, []int{batchSize, seqLen, m.config.VocabSize})
-	fmt.Printf("[MODEL] Output projection complete, logits shape: %v\n", logits.Shape())
+	if debugForward {
+		fmt.Printf("[MODEL] Output projection complete, logits shape: %v\n", logits.Shape())
+	}
 
 	// Debug: check logits distribution
 	if debugOutputNorm {
@@ -465,4 +462,35 @@ func (m *Model) ClearCache() {
 	for _, layer := range m.layers {
 		layer.ClearCache()
 	}
+}
+
+// WarmWeightCache pre-dequantizes and transposes all quantized weight matrices.
+// This eliminates the cold-cache penalty on the first forward pass by paying the
+// dequantization cost at load time instead.
+func (m *Model) WarmWeightCache() {
+	count := 0
+	for _, layer := range m.layers {
+		// Attention weights
+		for _, w := range []*tensor.Tensor{layer.attn.wq, layer.attn.wk, layer.attn.wv, layer.attn.wo} {
+			if w != nil && w.DType() != tensor.Float32 {
+				w.GetOrDequantTranspose()
+				count++
+			}
+		}
+		// FFN weights
+		for _, w := range []*tensor.Tensor{layer.ffn.gate, layer.ffn.up, layer.ffn.down} {
+			if w != nil && w.DType() != tensor.Float32 {
+				w.GetOrDequantTranspose()
+				count++
+			}
+		}
+	}
+
+	// Also warm the output weight
+	if m.outputWeight != nil && m.outputWeightCache == nil && m.outputWeight.DType() != tensor.Float32 {
+		m.outputWeightCache = tensor.Dequantize(m.outputWeight)
+		count++
+	}
+
+	fmt.Printf("Warmed %d weight caches\n", count)
 }
